@@ -92,7 +92,7 @@ export function renderMessageTemplate(body: string, context: TemplateContext): R
     missingVariables: [...missingVariables],
     length: text.length,
     byteLength,
-    messageKind: byteLength > 90 ? "LMS" : "SMS",
+    messageKind: byteLength > 80 ? "LMS" : "SMS",
   };
 }
 
@@ -111,6 +111,6 @@ export function messageByteLength(value: string) {
 }
 
 export function messageLengthLabel(byteLength: number) {
-  if (byteLength <= 90) return `${byteLength} byte / SMS 예상`;
+  if (byteLength <= 80) return `${byteLength} byte / SMS 예상`;
   return `${byteLength} byte / LMS 전환 가능`;
 }

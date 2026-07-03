@@ -439,6 +439,7 @@ export async function sendMessageJobAction(formData: FormData) {
             fromConfigured: providerStatus.hasSenderNumber,
             byteLength: recipient.messageText.length,
             marketing: isMarketing,
+            providerRequest: result?.requestPayload ?? null,
           }).slice(0, 2000),
           responsePayload: result?.responsePayload ? JSON.stringify(result.responsePayload).slice(0, 2000) : null,
           status: result?.status ?? "FAILED",
@@ -509,32 +510,32 @@ export async function saveSsodaaSettingsAction(formData: FormData) {
 export async function testSsodaaConnectionAction() {
   const user = await requireUser();
   if (!canManageSmsSettings(user.role)) redirect(messagesUrl({ tab: "settings", error: "settings-permission" }));
+  let settingsStatus = "connected";
   try {
     const [amount, phones] = await Promise.all([getRemainingAmount(user.academyId), listSendPhones(user.academyId)]);
     await updateSsodaaConnection(user.academyId, "CONNECTED", `연결됨. 잔여 포인트 ${amount ?? "확인됨"}, 발신번호 ${phones.length}개`);
-    revalidatePath("/messages");
-    redirect(messagesUrl({ tab: "settings", settingsStatus: "connected" }));
   } catch (error) {
     const message = normalizeSsodaaError(error);
     await updateSsodaaConnection(user.academyId, "FAILED", message);
-    revalidatePath("/messages");
-    redirect(messagesUrl({ tab: "settings", settingsStatus: "failed" }));
+    settingsStatus = "failed";
   }
+  revalidatePath("/messages");
+  redirect(messagesUrl({ tab: "settings", settingsStatus }));
 }
 
 export async function loadSsodaaSendPhonesAction() {
   const user = await requireUser();
   if (!canManageSmsSettings(user.role)) redirect(messagesUrl({ tab: "settings", error: "settings-permission" }));
+  let settingsStatus = "phones";
   try {
     const phones = await listSendPhones(user.academyId);
     await updateSsodaaConnection(user.academyId, "CONNECTED", `등록 발신번호: ${phones.join(", ") || "없음"}`);
-    revalidatePath("/messages");
-    redirect(messagesUrl({ tab: "settings", settingsStatus: "phones" }));
   } catch (error) {
     await updateSsodaaConnection(user.academyId, "FAILED", normalizeSsodaaError(error));
-    revalidatePath("/messages");
-    redirect(messagesUrl({ tab: "settings", settingsStatus: "failed" }));
+    settingsStatus = "failed";
   }
+  revalidatePath("/messages");
+  redirect(messagesUrl({ tab: "settings", settingsStatus }));
 }
 
 export async function sendSsodaaTestMessageAction(formData: FormData) {
@@ -542,6 +543,10 @@ export async function sendSsodaaTestMessageAction(formData: FormData) {
   if (!canManageSmsSettings(user.role)) redirect(messagesUrl({ tab: "settings", error: "settings-permission" }));
   const phone = normalizePhoneNumber(text(formData, "testReceiverPhone"));
   if (!phone) redirect(messagesUrl({ tab: "settings", settingsStatus: "test-phone-required" }));
+  const providerStatus = await getSmsProviderStatusForAcademy(user.academyId);
+  if (providerStatus.dryRun || !providerStatus.canSendActual) {
+    redirect(messagesUrl({ tab: "settings", settingsStatus: "test-blocked" }));
+  }
   const jobId = randomUUID();
   const recipientId = randomUUID();
   const messageText = `[${user.academy.name}] 쏘다 API 테스트 문자입니다.`;
@@ -559,10 +564,9 @@ export async function sendSsodaaTestMessageAction(formData: FormData) {
     await prisma.$transaction([
       prisma.messageRecipient.update({ where: { id: recipientId }, data: { status: "SUCCESS", providerMessageId: sent.providerMessageId, sentAt: new Date() } }),
       prisma.messageJob.update({ where: { id: jobId }, data: { status: "SUCCESS", successCount: 1, failedCount: 0, sentAt: new Date() } }),
-      prisma.smsProviderLog.create({ data: { academyId: user.academyId, jobId, recipientId, provider: "ssodaa", requestPayload: JSON.stringify({ to: phone, test: true }).slice(0, 2000), responsePayload: JSON.stringify(sent.response).slice(0, 2000), status: "SUCCESS" } }),
+      prisma.smsProviderLog.create({ data: { academyId: user.academyId, jobId, recipientId, provider: "ssodaa", requestPayload: JSON.stringify({ to: phone, test: true, providerRequest: sent.requestPayload }).slice(0, 2000), responsePayload: JSON.stringify(sent.response).slice(0, 2000), status: "SUCCESS" } }),
     ]);
     revalidatePath("/messages");
-    redirect(messagesUrl({ tab: "settings", settingsStatus: "test-sent" }));
   } catch (error) {
     const message = normalizeSsodaaError(error);
     await prisma.$transaction([
@@ -573,6 +577,7 @@ export async function sendSsodaaTestMessageAction(formData: FormData) {
     revalidatePath("/messages");
     redirect(messagesUrl({ tab: "settings", settingsStatus: "test-failed" }));
   }
+  redirect(messagesUrl({ tab: "settings", settingsStatus: "test-sent" }));
 }
 
 async function updateSsodaaConnection(academyId: string, status: string, message: string) {

@@ -47,7 +47,7 @@ export default function MessageLogTable({ logs, templates, filters }: Props) {
     <section style={wrap}>
       <div>
         <h2 style={title}>발송 기록</h2>
-        <p style={desc}>dry-run과 실제 발송 결과를 함께 확인합니다. 재발송은 TODO로 남겨두었습니다.</p>
+        <p style={desc}>dry-run과 쏘다 접수 결과를 함께 확인합니다. 최종 도착 여부는 쏘다 발송내역에서 확인합니다.</p>
       </div>
 
       <form method="get" style={filterBar}>
@@ -103,7 +103,7 @@ export default function MessageLogTable({ logs, templates, filters }: Props) {
                       <div style={detailBox}>
                         <b>{log.receiverName}</b>
                         <p>{log.messageText}</p>
-                        <small>provider message id: {log.providerMessageId ?? "-"}</small>
+                        <small>쏘다 접수 ID: {log.providerMessageId ?? "-"}</small>
                         {log.errorMessage && <small style={errorText}>실패 사유: {log.errorMessage}</small>}
                       </div>
                     </details>
@@ -128,7 +128,7 @@ export default function MessageLogTable({ logs, templates, filters }: Props) {
 function statusLabel(status: string) {
   if (status === "PENDING") return "대기";
   if (status === "SENDING") return "발송 중";
-  if (status === "SUCCESS") return "성공";
+  if (status === "SUCCESS") return "요청 접수";
   if (status === "FAILED") return "실패";
   if (status === "DRY_RUN") return "dry-run";
   if (status === "PARTIAL_FAILED") return "일부 실패";
@@ -137,7 +137,7 @@ function statusLabel(status: string) {
 
 function statusBadge(status: string): CSSProperties {
   const base: CSSProperties = { borderRadius: "var(--asc-radius-md)", padding: "5px 8px", fontSize: 12, fontWeight: 950, whiteSpace: "nowrap" };
-  if (status === "SUCCESS") return { ...base, background: "var(--asc-success-soft)", color: "var(--asc-success)" };
+  if (status === "SUCCESS") return { ...base, background: "var(--asc-info-soft)", color: "var(--asc-info)" };
   if (status === "FAILED" || status === "PARTIAL_FAILED") return { ...base, background: "var(--asc-danger-soft)", color: "var(--asc-danger)" };
   if (status === "DRY_RUN") return { ...base, background: "var(--asc-info-soft)", color: "var(--asc-info)" };
   return { ...base, background: "var(--asc-bg-subtle)", color: "var(--asc-text-muted)" };

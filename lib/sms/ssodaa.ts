@@ -101,8 +101,11 @@ export async function getSsodaaProviderStatus(academyId: string): Promise<SmsPro
 }
 
 export async function listSendPhones(academyId: string) {
-  const response = await ssodaaRequest(academyId, "/sms/sendphone/list", {});
-  return extractPhoneList(response).map(formatPhoneNumber);
+  const config = await requireSsodaaConfig(academyId);
+  const response = await ssodaaRequestWithConfig(config, "/sms/sendphone/list", {});
+  const phones = extractPhoneList(response);
+  if (phones.length === 0 && config.defaultSendPhone) phones.push(config.defaultSendPhone);
+  return Array.from(new Set(phones)).map(formatPhoneNumber);
 }
 
 export async function getRemainingAmount(academyId: string) {
@@ -121,18 +124,10 @@ export async function sendSms(academyId: string, payload: {
   sendPhone?: string;
 }) {
   const config = await requireSsodaaConfig(academyId);
-  const isMarketing = Boolean(payload.recipient.isMarketing);
-  const messageBody = buildSsodaaMessageBody(payload.recipient.messageText, isMarketing, config.unsubPhone);
-  const requestPayload = {
-    msg_type: payload.recipient.messageKind ?? (payload.recipient.byteLength && payload.recipient.byteLength > 90 ? "LMS" : "SMS"),
-    dest_phone: payload.recipient.normalizedPhone,
-    send_phone: normalizePhoneNumber(payload.sendPhone) || config.defaultSendPhone,
-    subject: payload.subject || payload.recipient.subject || config.senderName || "ASC",
-    msg_body: messageBody,
-    send_time: payload.sendTime || "",
-    msg_ad: isMarketing ? "Y" : "N",
-    unsub_phone: isMarketing ? config.unsubPhone : "",
-  };
+  const requestPayload = buildSsodaaSendPayload(config, [payload.recipient], {
+    sendPhone: payload.sendPhone,
+    sendTime: payload.sendTime,
+  });
 
   const response = await ssodaaRequestWithConfig(config, "/sms/send/sms", requestPayload);
   return {
@@ -140,6 +135,45 @@ export async function sendSms(academyId: string, payload: {
     providerMessageId: extractProviderMessageId(response),
     requestPayload,
   };
+}
+
+async function sendBulkSms(academyId: string, messages: SmsRecipientPayload[]) {
+  const config = await requireSsodaaConfig(academyId);
+  const resultByLocalId = new Map<string, SmsSendResult>();
+
+  for (const group of groupBulkMessages(config, messages)) {
+    const requestPayload = buildSsodaaSendPayload(config, group);
+    try {
+      const response = await ssodaaRequestWithConfig(config, "/sms/send/sms", requestPayload);
+      const fallbackId = extractProviderMessageId(response);
+      const idsByPhone = extractSentMessageIdsByPhone(response);
+      for (const message of group) {
+        resultByLocalId.set(message.localId, {
+          localId: message.localId,
+          status: "SUCCESS",
+          providerMessageId: idsByPhone.get(message.normalizedPhone) ?? fallbackId,
+          requestPayload,
+          responsePayload: response,
+        });
+      }
+    } catch (error) {
+      const errorMessage = normalizeSsodaaError(error);
+      for (const message of group) {
+        resultByLocalId.set(message.localId, {
+          localId: message.localId,
+          status: "FAILED",
+          errorMessage,
+          requestPayload,
+        });
+      }
+    }
+  }
+
+  return messages.map((message) => resultByLocalId.get(message.localId) ?? ({
+    localId: message.localId,
+    status: "FAILED",
+    errorMessage: "쏘다 발송 결과를 확인할 수 없습니다.",
+  } satisfies SmsSendResult));
 }
 
 export function createSsodaaProvider(academyId: string, status: SmsProviderStatus): SmsProvider {
@@ -157,6 +191,7 @@ export function createSsodaaProvider(academyId: string, status: SmsProviderStatu
           localId: message.localId,
           status: "SUCCESS",
           providerMessageId: sent.providerMessageId,
+          requestPayload: sent.requestPayload,
           responsePayload: sent.response,
         } satisfies SmsSendResult;
       } catch (error) {
@@ -168,9 +203,7 @@ export function createSsodaaProvider(academyId: string, status: SmsProviderStatu
       }
     },
     async sendBulkMessages(messages: SmsRecipientPayload[]) {
-      const results: SmsSendResult[] = [];
-      for (const message of messages) results.push(await this.sendMessage(message));
-      return results;
+      return sendBulkSms(academyId, messages);
     },
   };
 }
@@ -214,6 +247,38 @@ async function ssodaaRequestWithConfig(config: SsodaaConfig, path: string, body:
   return json;
 }
 
+function buildSsodaaSendPayload(config: SsodaaConfig, messages: SmsRecipientPayload[], options: { sendTime?: string; sendPhone?: string } = {}) {
+  const first = messages[0];
+  if (!first) throw new Error("쏘다 발송 대상이 없습니다.");
+  const isMarketing = Boolean(first.isMarketing);
+  return {
+    msg_type: "sms",
+    dest_phone: messages.map((message) => message.normalizedPhone).join("|"),
+    send_phone: normalizePhoneNumber(options.sendPhone) || config.defaultSendPhone,
+    msg_body: buildSsodaaMessageBody(first.messageText, isMarketing, config.unsubPhone),
+    send_time: options.sendTime || "",
+    msg_ad: isMarketing ? "Y" : "N",
+    unsub_phone: isMarketing ? config.unsubPhone : "",
+  };
+}
+
+function groupBulkMessages(config: SsodaaConfig, messages: SmsRecipientPayload[]) {
+  const groups = new Map<string, SmsRecipientPayload[]>();
+  for (const message of messages) {
+    const isMarketing = Boolean(message.isMarketing);
+    const key = JSON.stringify({
+      body: buildSsodaaMessageBody(message.messageText, isMarketing, config.unsubPhone),
+      sendPhone: config.defaultSendPhone,
+      msgAd: isMarketing ? "Y" : "N",
+      unsubPhone: isMarketing ? config.unsubPhone : "",
+    });
+    const group = groups.get(key) ?? [];
+    group.push(message);
+    groups.set(key, group);
+  }
+  return [...groups.values()];
+}
+
 function isSsodaaFailure(value: unknown) {
   if (!value || typeof value !== "object") return false;
   const obj = value as Record<string, unknown>;
@@ -249,47 +314,141 @@ function extractMessage(value: unknown): string | null {
 }
 
 function extractPhoneList(value: unknown): string[] {
+  const phones = new Set<string>();
   const arrays: unknown[] = [];
   if (Array.isArray(value)) arrays.push(value);
   if (value && typeof value === "object") {
     const obj = value as Record<string, unknown>;
-    for (const key of ["data", "list", "items", "sendphones", "sendPhones"]) {
+    for (const key of ["content", "data", "list", "items", "sendphones", "sendPhones", "send_phone", "sendPhone", "send_phone_list", "sendPhoneList"]) {
       if (Array.isArray(obj[key])) arrays.push(obj[key]);
     }
   }
-  return arrays.flatMap((items) =>
-    Array.isArray(items)
-      ? items.map((item) => {
-          if (typeof item === "string") return normalizePhoneNumber(item);
-          if (item && typeof item === "object") {
-            const row = item as Record<string, unknown>;
-            const rawPhone = row.send_phone ?? row.sendPhone ?? row.phone ?? row.number ?? row.send_phone_number;
-            return typeof rawPhone === "string" || typeof rawPhone === "number" ? normalizePhoneNumber(String(rawPhone)) : "";
-          }
-          return "";
-        })
-      : [],
-  ).filter(Boolean);
+
+  for (const items of arrays) collectPhones(items, phones);
+  if (phones.size === 0) collectPhones(value, phones);
+  return [...phones];
+}
+
+function collectPhones(value: unknown, phones: Set<string>) {
+  if (typeof value === "string" || typeof value === "number") {
+    addPhoneCandidate(value, phones);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectPhones(item, phones);
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+
+  const row = value as Record<string, unknown>;
+  for (const key of ["send_phone", "sendPhone", "phone", "number", "send_phone_number", "sendPhoneNumber", "callback", "callbackPhone"]) {
+    addPhoneCandidate(row[key], phones);
+  }
+  for (const key of ["content", "data", "list", "items", "sendphones", "sendPhones", "send_phone_list", "sendPhoneList"]) {
+    collectPhones(row[key], phones);
+  }
+}
+
+function addPhoneCandidate(value: unknown, phones: Set<string>) {
+  if (typeof value !== "string" && typeof value !== "number") return;
+  const normalized = normalizePhoneNumber(String(value));
+  if (normalized.length >= 8 && normalized.length <= 11) phones.add(normalized);
 }
 
 function extractAmount(value: unknown): number | null {
-  if (!value || typeof value !== "object") return null;
-  const obj = value as Record<string, unknown>;
-  const nested = obj.data && typeof obj.data === "object" ? (obj.data as Record<string, unknown>) : obj;
-  for (const key of ["amount", "remaining_amount", "remainingAmount", "point", "points", "balance"]) {
-    const raw = nested[key];
-    const number = typeof raw === "number" ? raw : Number(String(raw ?? "").replace(/,/g, ""));
-    if (Number.isFinite(number)) return number;
+  const candidates: number[] = [];
+  collectAmounts(value, candidates);
+  return candidates.find((number) => number > 0) ?? candidates[0] ?? null;
+}
+
+function collectAmounts(value: unknown, candidates: number[]) {
+  if (!value || typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    for (const item of value) collectAmounts(item, candidates);
+    return;
   }
-  return null;
+
+  const obj = value as Record<string, unknown>;
+  for (const key of [
+    "amount",
+    "remaining_amount",
+    "remainingAmount",
+    "remain_amount",
+    "remainAmount",
+    "point",
+    "points",
+    "remaining_point",
+    "remainingPoint",
+    "remain_point",
+    "remainPoint",
+    "currentPoint",
+    "usablePoint",
+    "balance",
+    "cash",
+    "money",
+    "sms_point",
+    "smsPoint",
+  ]) {
+    const number = parseAmount(obj[key]);
+    if (number !== null) candidates.push(number);
+  }
+
+  for (const key of ["content", "data", "result", "results", "item", "items", "info", "account", "balance"]) {
+    collectAmounts(obj[key], candidates);
+  }
+}
+
+function parseAmount(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string") return null;
+  const parsed = Number(value.replace(/,/g, "").replace(/[^\d.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function extractProviderMessageId(value: unknown) {
   if (!value || typeof value !== "object") return null;
   const obj = value as Record<string, unknown>;
   const nested = obj.data && typeof obj.data === "object" ? (obj.data as Record<string, unknown>) : obj;
-  const id = nested.msg_id ?? nested.messageId ?? nested.message_id ?? nested.id ?? nested.group_id ?? nested.groupId;
+  const content = obj.content && typeof obj.content === "object" ? (obj.content as Record<string, unknown>) : null;
+  const sentMessages = Array.isArray(content?.sent_messages) ? content.sent_messages : Array.isArray(content?.sentMessages) ? content.sentMessages : null;
+  const firstSentMessage = sentMessages?.[0] && typeof sentMessages[0] === "object" ? (sentMessages[0] as Record<string, unknown>) : null;
+  const id =
+    nested.msg_id ??
+    nested.messageId ??
+    nested.message_id ??
+    nested.id ??
+    nested.group_id ??
+    nested.groupId ??
+    content?.msg_id ??
+    content?.messageId ??
+    content?.message_id ??
+    firstSentMessage?.msg_id ??
+    firstSentMessage?.messageId ??
+    firstSentMessage?.message_id;
   return id ? String(id) : null;
+}
+
+function extractSentMessageIdsByPhone(value: unknown) {
+  const idsByPhone = new Map<string, string>();
+  if (!value || typeof value !== "object") return idsByPhone;
+  const obj = value as Record<string, unknown>;
+  const content = obj.content && typeof obj.content === "object" ? (obj.content as Record<string, unknown>) : null;
+  const data = obj.data && typeof obj.data === "object" ? (obj.data as Record<string, unknown>) : null;
+  const sentMessages = [
+    ...(Array.isArray(content?.sent_messages) ? content.sent_messages : []),
+    ...(Array.isArray(content?.sentMessages) ? content.sentMessages : []),
+    ...(Array.isArray(data?.sent_messages) ? data.sent_messages : []),
+    ...(Array.isArray(data?.sentMessages) ? data.sentMessages : []),
+  ];
+
+  for (const item of sentMessages) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    const phone = normalizePhoneNumber(String(row.dest_phone ?? row.destPhone ?? ""));
+    const id = row.msg_id ?? row.messageId ?? row.message_id;
+    if (phone && id) idsByPhone.set(phone, String(id));
+  }
+  return idsByPhone;
 }
 
 function buildSsodaaMessageBody(message: string, isMarketing: boolean, unsubPhone: string) {
@@ -313,4 +472,3 @@ function ssodaaDisabledReason({ dryRun, hasApiKey, hasApiSecret, hasSenderNumber
   if (connectionStatus === "FAILED") return "쏘다 API 연결 테스트가 실패 상태입니다.";
   return "쏘다 API 설정 확인이 필요합니다.";
 }
-

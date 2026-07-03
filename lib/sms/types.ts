@@ -68,6 +68,7 @@ export type SmsSendResult = {
   status: Exclude<MessageRecipientStatus, "PENDING" | "SENDING" | "SKIPPED" | "BLOCKED">;
   providerMessageId?: string | null;
   errorMessage?: string | null;
+  requestPayload?: unknown;
   responsePayload?: unknown;
 };
 

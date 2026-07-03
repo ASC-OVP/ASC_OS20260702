@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { flushSync } from "react-dom";
 import { sendMessageJobAction } from "@/features/messages/actions/messageActions";
 import MessagePreviewList from "@/features/messages/components/MessagePreviewList";
 import { buildMessageRecipients, type MessageStudent } from "@/lib/sms/recipients";
@@ -101,17 +102,27 @@ export default function MessageComposer({ academyName, classGroups, students, ex
     if (!template) return;
     setTitle(template.title || template.name);
     setTargetType((template.targetType as MessageTargetType) || "GUARDIAN");
+    setPreviewRecipientId("");
     setBody(template.body);
     setIsMarketing(Boolean(template.isMarketing));
   };
-  const toggleStudent = (studentId: string) => setSelectedStudentIds((current) => current.includes(studentId) ? current.filter((id) => id !== studentId) : [...current, studentId]);
+  const toggleStudent = (studentId: string) => {
+    setSelectedStudentIds((current) => current.includes(studentId) ? current.filter((id) => id !== studentId) : [...current, studentId]);
+    setPreviewRecipientId((current) => current.startsWith(`${studentId}:`) ? "" : current);
+  };
   const addFilteredStudents = (nextTargetType?: MessageTargetType) => {
-    if (nextTargetType) setTargetType(nextTargetType);
-    setSelectedStudentIds((current) => Array.from(new Set([...current, ...filteredStudents.map((student) => student.id)])));
+    const filteredIds = filteredStudents.map((student) => student.id);
+    flushSync(() => {
+      if (nextTargetType) setTargetType(nextTargetType);
+      setSelectedStudentIds((current) => Array.from(new Set([...current, ...filteredIds])));
+      setPreviewRecipientId("");
+    });
   };
   const toggleFilteredStudents = () => {
     const filteredIds = filteredStudents.map((student) => student.id);
-    setSelectedStudentIds((current) => allFilteredSelected ? current.filter((id) => !filteredIds.includes(id)) : Array.from(new Set([...current, ...filteredIds])));
+    const filteredIdSet = new Set(filteredIds);
+    setSelectedStudentIds((current) => allFilteredSelected ? current.filter((id) => !filteredIdSet.has(id)) : Array.from(new Set([...current, ...filteredIds])));
+    setPreviewRecipientId((current) => filteredIds.some((studentId) => current.startsWith(`${studentId}:`)) ? "" : current);
   };
   const insertVariable = (variable: string) => {
     const insertion = `{{${variable}}}`;
@@ -164,7 +175,7 @@ export default function MessageComposer({ academyName, classGroups, students, ex
             <label style={field}><span>템플릿</span><select name="templateId" value={templateId} onChange={(event) => selectTemplate(event.target.value)} style={input}><option value="">직접 작성</option>{templates.filter((template) => template.isActive).map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>
             <label style={field}><span>제목</span><input name="title" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={40} style={input} /></label>
           </div>
-          <div style={pillRow}>{messageTargetTypes.map((target) => <label key={target.value} style={{ ...pill, ...(targetType === target.value ? activePill : {}) }}><input type="radio" name="targetType" value={target.value} checked={targetType === target.value} onChange={() => setTargetType(target.value)} />{target.label}</label>)}</div>
+          <div style={pillRow}>{messageTargetTypes.map((target) => <label key={target.value} style={{ ...pill, ...(targetType === target.value ? activePill : {}) }}><input type="radio" name="targetType" value={target.value} checked={targetType === target.value} onChange={() => { setTargetType(target.value); setPreviewRecipientId(""); }} />{target.label}</label>)}</div>
           <label style={checkLine}><input type="checkbox" checked={isMarketing} onChange={(event) => setIsMarketing(event.target.checked)} /> 광고 문자로 발송</label>
           <textarea ref={textareaRef} name="body" value={body} onChange={(event) => setBody(event.target.value)} rows={11} style={textarea} aria-label="문자 본문" />
           <div style={variableBox}>{variableGroups.map(([group, items]) => <div key={group} style={chipLine}><b>{group}</b>{items.map((item) => <button key={item} type="button" style={chip} onClick={() => insertVariable(item)}>{`{{${item}}}`}</button>)}</div>)}</div>
@@ -197,7 +208,7 @@ export default function MessageComposer({ academyName, classGroups, students, ex
         </section>
       </form>
 
-      {confirmOpen && <div style={modalBackdrop} role="presentation"><div style={modal} role="dialog" aria-modal="true" aria-label="문자 발송 확인"><h3 style={modalTitle}>{sendMode === "actual" ? "최종 발송 확인" : "테스트 실행 확인"}</h3><div style={modalStats}><Summary label="발송 대상" value={`${preview.recipients.length}명`} /><Summary label="학생" value={`${preview.recipients.filter((recipient) => recipient.recipientType === "STUDENT").length}명`} /><Summary label="학부모" value={`${preview.recipients.filter((recipient) => recipient.recipientType === "GUARDIAN").length}명`} /><Summary label="제외" value={`${preview.skipped.length}건`} /><Summary label="유형" value={preview.maxByteLength > 90 ? "LMS 포함" : "SMS"} /><Summary label="광고" value={isMarketing ? "예" : "아니오"} /></div><p style={modalCopy}>{sendMode === "actual" ? `${preview.recipients.length}명에게 문자를 발송합니다. 이 작업은 되돌릴 수 없습니다.` : "테스트 실행은 실제 발송 없이 로그와 검증 흐름을 확인합니다."}</p>{preview.missingVariables.length > 0 && <p style={modalWarn}>값이 없는 변수가 있어 실제 발송은 차단됩니다.</p>}<div style={modalPreview}>{previewRecipient?.messageText ?? body}</div><div style={modalActions}><button type="button" style={ghostButton} onClick={() => setConfirmOpen(false)}>닫기</button><button type="button" style={sendMode === "actual" ? primaryButton : secondaryButton} onClick={() => { setConfirmOpen(false); window.setTimeout(() => formRef.current?.requestSubmit(), 0); }}>{sendMode === "actual" ? `${preview.recipients.length}명에게 문자 발송` : "테스트 실행"}</button></div></div></div>}
+      {confirmOpen && <div style={modalBackdrop} role="presentation"><div style={modal} role="dialog" aria-modal="true" aria-label="문자 발송 확인"><h3 style={modalTitle}>{sendMode === "actual" ? "최종 발송 확인" : "테스트 실행 확인"}</h3><div style={modalStats}><Summary label="발송 대상" value={`${preview.recipients.length}명`} /><Summary label="학생" value={`${preview.recipients.filter((recipient) => recipient.recipientType === "STUDENT").length}명`} /><Summary label="학부모" value={`${preview.recipients.filter((recipient) => recipient.recipientType === "GUARDIAN").length}명`} /><Summary label="제외" value={`${preview.skipped.length}건`} /><Summary label="유형" value={preview.maxByteLength > 80 ? "LMS 포함" : "SMS"} /><Summary label="광고" value={isMarketing ? "예" : "아니오"} /></div><p style={modalCopy}>{sendMode === "actual" ? `${preview.recipients.length}명에게 문자를 발송합니다. 이 작업은 되돌릴 수 없습니다.` : "테스트 실행은 실제 발송 없이 로그와 검증 흐름을 확인합니다."}</p>{preview.missingVariables.length > 0 && <p style={modalWarn}>값이 없는 변수가 있어 실제 발송은 차단됩니다.</p>}<div style={modalPreview}>{previewRecipient?.messageText ?? body}</div><div style={modalActions}><button type="button" style={ghostButton} onClick={() => setConfirmOpen(false)}>닫기</button><button type="button" style={sendMode === "actual" ? primaryButton : secondaryButton} onClick={() => { setConfirmOpen(false); window.setTimeout(() => formRef.current?.requestSubmit(), 0); }}>{sendMode === "actual" ? `${preview.recipients.length}명에게 문자 발송` : "테스트 실행"}</button></div></div></div>}
     </section>
   );
 }
@@ -254,7 +265,7 @@ const field: CSSProperties = { display: "grid", gap: 5, color: "var(--asc-text-s
 const input: CSSProperties = { width: "100%", height: 36, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", padding: "0 10px", color: "var(--asc-text)", background: "var(--asc-bg-subtle)" };
 const textarea: CSSProperties = { ...input, height: "auto", minHeight: 190, resize: "vertical", padding: 10, lineHeight: 1.5 };
 const pillRow: CSSProperties = { display: "flex", gap: 6, flexWrap: "wrap" };
-const pill: CSSProperties = { display: "inline-flex", alignItems: "center", gap: 6, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", padding: "7px 10px", fontWeight: 900, cursor: "pointer" };
+const pill: CSSProperties = { display: "inline-flex", alignItems: "center", gap: 6, borderWidth: 1, borderStyle: "solid", borderColor: "transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", padding: "7px 10px", fontWeight: 900, cursor: "pointer" };
 const activePill: CSSProperties = { borderColor: "var(--asc-primary)", background: "var(--asc-primary-soft)", color: "var(--asc-primary)" };
 const checkLine: CSSProperties = { display: "inline-flex", alignItems: "center", gap: 7, fontWeight: 900, color: "var(--asc-text-subtle)" };
 const variableBox: CSSProperties = { display: "grid", gap: 6 };
@@ -271,12 +282,12 @@ const bubble: CSSProperties = { border: "1px solid transparent", borderRadius: "
 const mutedText: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 12, fontWeight: 900 };
 const mutedRight: CSSProperties = { ...mutedText, textAlign: "right" };
 const warn: CSSProperties = { border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-warning-soft)", color: "var(--asc-warning-text)", padding: 8, fontWeight: 900, fontSize: 12 };
-const filterButton: CSSProperties = { border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", padding: "6px 9px", fontSize: 12, fontWeight: 900 };
+const filterButton: CSSProperties = { borderWidth: 1, borderStyle: "solid", borderColor: "transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", padding: "6px 9px", fontSize: 12, fontWeight: 900 };
 const activeFilter: CSSProperties = { borderColor: "var(--asc-primary)", background: "var(--asc-primary-soft)", color: "var(--asc-primary)" };
 const bulkRow: CSSProperties = { display: "flex", gap: 6, flexWrap: "wrap" };
 const smallButton: CSSProperties = { height: 30, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", color: "var(--asc-text)", padding: "0 10px", fontWeight: 900 };
 const studentList: CSSProperties = { display: "grid", gap: 5, maxHeight: 520, overflowY: "auto", paddingRight: 2 };
-const studentRow: CSSProperties = { display: "grid", gridTemplateColumns: "22px minmax(120px, 1fr) minmax(90px, .5fr) minmax(130px, .8fr)", alignItems: "center", gap: 7, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", padding: "7px 8px", cursor: "pointer" };
+const studentRow: CSSProperties = { display: "grid", gridTemplateColumns: "22px minmax(120px, 1fr) minmax(90px, .5fr) minmax(130px, .8fr)", alignItems: "center", gap: 7, borderWidth: 1, borderStyle: "solid", borderColor: "transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", padding: "7px 8px", cursor: "pointer" };
 const selectedRow: CSSProperties = { borderColor: "var(--asc-primary)", background: "var(--asc-primary-soft)" };
 const studentMain: CSSProperties = { display: "grid", minWidth: 0 };
 const scoreText: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 12, fontWeight: 900 };

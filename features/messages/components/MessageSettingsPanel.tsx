@@ -46,7 +46,7 @@ export default function MessageSettingsPanel({ settings, canManage, settingsStat
         <div style={actions}>
           <form action={testSsodaaConnectionAction}><button type="submit" style={secondaryButton} disabled={!canManage}>연결 테스트 / 잔여 포인트 조회</button></form>
           <form action={loadSsodaaSendPhonesAction}><button type="submit" style={secondaryButton} disabled={!canManage}>발신번호 목록 불러오기</button></form>
-          <form action={sendSsodaaTestMessageAction} style={testForm}><input name="testReceiverPhone" placeholder="테스트 수신번호" defaultValue={settings.testReceiverPhone ?? ""} style={input} /><button type="submit" style={primaryButton} disabled={!canManage}>테스트 문자 발송</button></form>
+          <form action={sendSsodaaTestMessageAction} style={testForm}><input name="testReceiverPhone" placeholder="테스트 수신번호" defaultValue={settings.testReceiverPhone ?? ""} style={input} /><button type="submit" style={primaryButton} disabled={!canManage || settings.dryRun || !settings.canSendActual}>테스트 문자 발송</button></form>
         </div>
       </section>
 
@@ -75,11 +75,12 @@ function settingsStatusMessage(value: string) {
   if (value === "failed") return "쏘다 API 연결에 실패했습니다. API Key, Token Key, 서버 IP, 발신번호를 확인해주세요.";
   if (value === "test-sent") return "테스트 문자를 발송했습니다.";
   if (value === "test-failed") return "테스트 문자 발송에 실패했습니다.";
+  if (value === "test-blocked") return "테스트 문자 발송이 차단되었습니다. 실제 발송 가능 상태에서만 발송됩니다.";
   if (value === "test-phone-required") return "테스트 수신번호를 입력해주세요.";
   if (value === "encryption-required") return "DB에 API Key를 저장하려면 APP_ENCRYPTION_KEY 환경변수가 필요합니다.";
   return "요청을 처리했습니다.";
 }
-function statusNotice(value: string): CSSProperties { return value.includes("failed") || value.includes("required") ? dangerNotice : successNotice; }
+function statusNotice(value: string): CSSProperties { return value.includes("failed") || value.includes("required") || value.includes("blocked") ? dangerNotice : successNotice; }
 function toneStyle(tone: string): CSSProperties { if (tone === "success") return { background: "var(--asc-success-soft)", color: "var(--asc-success)" }; if (tone === "warn") return { background: "var(--asc-warning-soft)", color: "var(--asc-warning-text)" }; if (tone === "danger") return { background: "var(--asc-danger-soft)", color: "var(--asc-danger)" }; if (tone === "info") return { background: "var(--asc-info-soft)", color: "var(--asc-info)" }; return {}; }
 
 const wrap: CSSProperties = { display: "grid", gap: 10 };

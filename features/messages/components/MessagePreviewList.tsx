@@ -22,7 +22,7 @@ export default function MessagePreviewList({ preview, selectedRecipientId, onSel
         <Summary label="학부모" value={`${guardianCount}명`} />
         <Summary label="제외" value={`${preview.skipped.length}건`} tone={preview.skipped.length > 0 ? "warn" : "default"} />
         <Summary label="누락 변수" value={`${preview.missingVariables.length}명`} tone={preview.missingVariables.length > 0 ? "warn" : "default"} />
-        <Summary label="최대 길이" value={messageLengthLabel(preview.maxByteLength)} tone={preview.maxByteLength > 90 ? "warn" : "default"} />
+        <Summary label="최대 길이" value={messageLengthLabel(preview.maxByteLength)} tone={preview.maxByteLength > 80 ? "warn" : "default"} />
       </div>
 
       {preview.unknownVariables.length > 0 && <div style={warningBox}>허용되지 않은 변수: {preview.unknownVariables.map((variable) => `{{${variable}}}`).join(", ")}</div>}
