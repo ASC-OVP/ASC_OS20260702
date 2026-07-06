@@ -1664,6 +1664,19 @@ export default function StudentLessonSpreadsheet({
     return `${names[0]} 외 ${names.length - 1}`;
   }
 
+  function orderClassGroupsForCell(options: LessonClassGroupOption[], selectedIds: string[]) {
+    if (selectedIds.length === 0) return options;
+    const order = new Map(selectedIds.map((id, index) => [id, index]));
+    return [...options].sort((a, b) => {
+      const aOrder = order.get(a.id);
+      const bOrder = order.get(b.id);
+      if (aOrder !== undefined && bOrder !== undefined) return aOrder - bOrder;
+      if (aOrder !== undefined) return -1;
+      if (bOrder !== undefined) return 1;
+      return 0;
+    });
+  }
+
   function resolveClassGroupInput(value: string) {
     const normalized = value.trim();
     if (!normalized || normalized === "-" || normalized === "미지정") {
@@ -2856,6 +2869,7 @@ export default function StudentLessonSpreadsheet({
   return (
     <div style={{ ...shell, ...(isFullscreen ? fullscreenShell : {}) }}>
       <div style={toolbar}>
+        <div style={toolbarMainRow}>
         <div style={toolbarGroup}>
           <ToolbarIconButton icon="undo" title="되돌리기 (Ctrl+Z)" onClick={undoSheetChange} disabled={!canUndo} />
           <ToolbarIconButton icon="redo" title="다시하기 (Ctrl+Y)" onClick={redoSheetChange} disabled={!canRedo} />
@@ -3110,13 +3124,16 @@ export default function StudentLessonSpreadsheet({
         <span style={selectedColumnPill} title={searchTargetLabel}><ToolbarIcon name="search" />{searchTargetLabel}</span>
         <input ref={searchInputRef} value={columnSearch} onChange={(event) => setColumnSearch(event.target.value)} placeholder={hasSelectionSearchScope ? "선택 범위에서 검색" : isGlobalSearchScope ? "전체 검색" : "선택한 열에서 검색"} style={toolbarInput} autoComplete="off" />
         {columnSearch && <ToolbarIconButton icon="eraser" title="검색 지우기" onClick={() => setColumnSearch("")} />}
+        </div>
 
+        <div style={toolbarStatusRow}>
         <div style={sheetMeta} title={scheduleSummary}>
           <b style={sheetMetaStrong}>{selectedClassGroup ? selectedClassGroup.name : "전체 학생"}</b>
           {changeSummary ? <span>{changeSummary}</span> : null}
         </div>
         <span style={selectionBadge}>{selectionLabel}</span>
         {statusText && <span style={{ ...saveStatus, ...(isPending ? pendingStatus : {}) }}>{statusText}</span>}
+        </div>
       </div>
 
       <div style={{ ...contentGrid, gridTemplateColumns: lessonPanelOpen ? "minmax(0, 1fr) 232px" : "minmax(0, 1fr)", height: sheetHeight }}>
@@ -3533,6 +3550,9 @@ export default function StudentLessonSpreadsheet({
                       const value = isRowNumberCell ? (isDraftRow ? "신규" : String(rowIndex + 1)) : editableMetaValue(row, column.id as EditableMetaColumnId);
                       const isEditingName = isNameCell && editingNameId === row.id;
                       const isEditingMeta = !isNameCell && canEditMeta && editingMetaKey === key;
+                      const classGroupCellIds = isClassGroupCell ? classGroupDraftIdList(row) : [];
+                      const orderedOperatingClassGroups = isClassGroupCell ? orderClassGroupsForCell(operatingClassGroups, classGroupCellIds) : operatingClassGroups;
+                      const orderedEndedClassGroups = isClassGroupCell ? orderClassGroupsForCell(endedClassGroups, classGroupCellIds) : endedClassGroups;
                       const localStyle = cellStyles[key] ?? {};
                       const displayValue =
                         isRowNumberCell && isDraftRow ? (
@@ -3624,8 +3644,8 @@ export default function StudentLessonSpreadsheet({
                                 {classGroupEditorEndedOpen ? "⌃" : "☰"}
                               </button>
                               <div style={classGroupCellEditorList} role="listbox" aria-multiselectable="true">
-                                {operatingClassGroups.map((option) => {
-                                  const checked = classGroupDraftIdList(row).includes(option.id);
+                                {orderedOperatingClassGroups.map((option) => {
+                                  const checked = classGroupCellIds.includes(option.id);
                                   return (
                                     <button
                                       key={option.id}
@@ -3641,11 +3661,11 @@ export default function StudentLessonSpreadsheet({
                                     </button>
                                   );
                                 })}
-                                {operatingClassGroups.length === 0 ? <div style={classGroupCellEmpty}>운영중인 강의가 없습니다.</div> : null}
+                                {orderedOperatingClassGroups.length === 0 ? <div style={classGroupCellEmpty}>운영중인 강의가 없습니다.</div> : null}
                                 {classGroupEditorEndedOpen
-                                  ? endedClassGroups.length > 0
-                                    ? endedClassGroups.map((option) => {
-                                        const checked = classGroupDraftIdList(row).includes(option.id);
+                                  ? orderedEndedClassGroups.length > 0
+                                    ? orderedEndedClassGroups.map((option) => {
+                                        const checked = classGroupCellIds.includes(option.id);
                                         return (
                                           <button
                                             key={option.id}
@@ -5768,31 +5788,54 @@ const replaceDisabledButton: CSSProperties = {
 };
 
 const selectionBadge: CSSProperties = {
-  padding: "0 8px",
-  height: 28,
+  padding: "0 7px",
+  height: 20,
   display: "inline-flex",
   alignItems: "center",
   border: "1px solid transparent",
-  borderRadius: 14,
+  borderRadius: 6,
   background: "#ffffff",
   color: "#5f6368",
-  fontSize: 12,
+  fontSize: 11,
+  fontWeight: 750,
   whiteSpace: "nowrap",
   flex: "0 0 auto",
 };
 
 const toolbar: CSSProperties = {
-  minHeight: 38,
-  display: "flex",
-  alignItems: "center",
-  gap: 4,
-  flexWrap: "wrap",
+  minHeight: 66,
+  display: "grid",
+  gridTemplateRows: "34px 24px",
+  alignItems: "stretch",
+  gap: 2,
   overflowX: "visible",
   overflowY: "visible",
-  padding: "4px 8px",
+  padding: "4px 8px 3px",
   borderBottom: "1px solid #dfe3eb",
   background: "#f1f3f4",
   scrollbarWidth: "none",
+};
+
+const toolbarMainRow: CSSProperties = {
+  minWidth: 0,
+  height: 34,
+  display: "flex",
+  alignItems: "center",
+  gap: 4,
+  flexWrap: "nowrap",
+  overflow: "visible",
+  whiteSpace: "nowrap",
+};
+
+const toolbarStatusRow: CSSProperties = {
+  minWidth: 0,
+  height: 24,
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  overflow: "hidden",
+  borderTop: "1px solid rgba(214, 219, 227, 0.72)",
+  paddingTop: 2,
 };
 
 const toolbarGroup: CSSProperties = {
@@ -5814,19 +5857,20 @@ const toolbarDivider: CSSProperties = {
 const sheetMeta: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
-  gap: 7,
+  gap: 6,
   flex: "0 1 auto",
   minWidth: 0,
   maxWidth: 430,
   overflow: "hidden",
   color: "#5f6368",
-  fontSize: 12,
+  fontSize: 11,
+  fontWeight: 750,
   whiteSpace: "nowrap",
 };
 
 const sheetMetaStrong: CSSProperties = {
   color: "var(--asc-sheet-text-strong)",
-  fontSize: 12,
+  fontSize: 11,
   fontWeight: 800,
   overflow: "hidden",
   textOverflow: "ellipsis",
@@ -5995,12 +6039,16 @@ const primaryButton: CSSProperties = {
 };
 
 const saveStatus: CSSProperties = {
-  padding: "4px 8px",
-  borderRadius: 999,
+  minHeight: 20,
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "0 7px",
+  borderRadius: 6,
   background: "#eef2ff",
   color: "#3730a3",
-  fontSize: 12,
+  fontSize: 11,
   fontWeight: 800,
+  whiteSpace: "nowrap",
 };
 
 const pendingStatus: CSSProperties = {
@@ -6964,23 +7012,25 @@ const nameEditInput: CSSProperties = {
 const classGroupCellEditor: CSSProperties = {
   position: "absolute",
   zIndex: 95,
-  minWidth: 250,
-  maxWidth: 320,
+  left: "50%",
+  transform: "translateX(-50%)",
+  width: 220,
+  maxWidth: "calc(100vw - 32px)",
   maxHeight: 260,
   display: "grid",
-  padding: "6px 4px",
+  padding: "5px 4px",
   border: "1px solid var(--asc-sheet-border)",
   borderRadius: 6,
   background: "var(--asc-sheet-bg)",
-  boxShadow: "0 8px 20px rgba(15, 23, 42, 0.14)",
+  boxShadow: "0 6px 16px rgba(15, 23, 42, 0.12)",
 };
 
 const classGroupCellDisplay: CSSProperties = { minWidth: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) 22px", alignItems: "center", gap: 4 };
 const classGroupCellDisplayText: CSSProperties = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
 const classGroupCellOpenButton: CSSProperties = { width: 22, height: 22, display: "grid", placeItems: "center", border: 0, borderRadius: 4, background: "transparent", color: "var(--asc-sheet-muted)", fontSize: 14, fontWeight: 950, lineHeight: 1, cursor: "pointer" };
-const classGroupCellEditorList: CSSProperties = { maxHeight: 248, overflowY: "auto", display: "grid", gap: 0, paddingRight: 28 };
-const classGroupCellFloatingIconButton: CSSProperties = { position: "absolute", top: 6, right: 6, width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", border: 0, borderRadius: 5, background: "var(--asc-bg-subtle)", color: "var(--asc-sheet-text)", fontSize: 12, fontWeight: 950, lineHeight: 1, cursor: "pointer" };
-const classGroupCellOption: CSSProperties = { width: "100%", minHeight: 30, display: "grid", gridTemplateColumns: "18px minmax(0, 1fr)", alignItems: "center", gap: 7, border: 0, borderRadius: 5, background: "transparent", color: "var(--asc-sheet-text)", padding: "5px 7px", fontSize: 12, fontWeight: 850, textAlign: "left", cursor: "pointer" };
+const classGroupCellEditorList: CSSProperties = { maxHeight: 248, overflowY: "auto", display: "grid", gap: 0, paddingRight: 22 };
+const classGroupCellFloatingIconButton: CSSProperties = { position: "absolute", top: 6, right: 6, width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", border: 0, borderRadius: 5, background: "var(--asc-bg-subtle)", color: "var(--asc-sheet-text)", fontSize: 11, fontWeight: 950, lineHeight: 1, cursor: "pointer" };
+const classGroupCellOption: CSSProperties = { width: "100%", minHeight: 28, display: "grid", gridTemplateColumns: "17px minmax(0, 1fr)", alignItems: "center", gap: 6, border: 0, borderRadius: 5, background: "transparent", color: "var(--asc-sheet-text)", padding: "4px 6px", fontSize: 12, fontWeight: 850, textAlign: "left", cursor: "pointer" };
 const classGroupCellOptionChecked: CSSProperties = { background: "var(--asc-sheet-primary-soft)", color: "var(--asc-sheet-primary)" };
 const classGroupCellCheck: CSSProperties = { width: 14, color: "var(--asc-sheet-muted)", textAlign: "center", fontSize: 12, fontWeight: 950 };
 const classGroupCellCheckOn: CSSProperties = { color: "var(--asc-sheet-primary)" };

@@ -211,25 +211,30 @@ export async function loadStudentsPageData(searchParams?: StudentsPageSearchPara
   }
 
   const rows: StudentSheetRow[] = students.map((student, index) => {
-    const selectedClassGroupIdSet = new Set(effectiveClassGroupIds);
     const selectedClass = effectiveClassGroupId ? student.studentClasses.find((membership) => membership.classGroupId === effectiveClassGroupId) : null;
     const activeOperatingClasses = student.studentClasses.filter(
       (membership) => membership.status === EnrollmentStatus.ACTIVE && effectiveClassStatus(membership.classGroup) !== ClassGroupStatus.ENDED
     );
     const selectedMemberships =
       effectiveClassGroupIds.length > 1
-        ? student.studentClasses.filter((membership) => {
-            if (!selectedClassGroupIdSet.has(membership.classGroupId)) return false;
-            const isEnded = effectiveClassStatus(membership.classGroup) === ClassGroupStatus.ENDED;
-            return isEnded || membership.status === EnrollmentStatus.ACTIVE;
+        ? effectiveClassGroupIds.flatMap((classGroupId) => {
+            const membership = student.studentClasses.find((item) => {
+              if (item.classGroupId !== classGroupId) return false;
+              const isEnded = effectiveClassStatus(item.classGroup) === ClassGroupStatus.ENDED;
+              return isEnded || item.status === EnrollmentStatus.ACTIVE;
+            });
+            return membership ? [membership] : [];
           })
         : [];
-    const displayMemberships = selectedClass ? [selectedClass] : selectedMemberships.length > 0 ? selectedMemberships : activeOperatingClasses;
+    const activityMemberships = selectedClass ? [selectedClass] : selectedMemberships.length > 0 ? selectedMemberships : activeOperatingClasses;
+    const displayMemberships = uniqueStudentClassMemberships([
+      ...(selectedClass ? [selectedClass] : selectedMemberships),
+      ...activeOperatingClasses,
+    ]);
+    const visibleMemberships = displayMemberships.length > 0 ? displayMemberships : activityMemberships;
     const primaryClass = selectedClass ?? selectedMemberships.find((membership) => membership.isPrimary) ?? selectedMemberships[0] ?? activeOperatingClasses.find((membership) => membership.isPrimary) ?? activeOperatingClasses[0] ?? student.studentClasses.find((membership) => membership.isPrimary) ?? student.studentClasses[0];
-    const classGroupName = selectedClass
-      ? selectedClass.classGroup?.name ?? ""
-      : summarizeClassGroups(displayMemberships.map((membership) => membership.classGroup?.name).filter((name): name is string => Boolean(name)));
-    const scopedActivity = scopedStudentActivity(student, displayMemberships);
+    const classGroupName = summarizeClassGroups(visibleMemberships.map((membership) => membership.classGroup?.name).filter((name): name is string => Boolean(name)));
+    const scopedActivity = scopedStudentActivity(student, activityMemberships);
     const attendance = scopedActivity.attendanceRecords.find((record) => record.date === date);
     const assignment = scopedActivity.assignmentRecords.find((record) => record.date === date);
     const legacyScore = scopedActivity.scoreRecords.find((record) => record.date === date);
@@ -247,7 +252,7 @@ export async function loadStudentsPageData(searchParams?: StudentsPageSearchPara
       schoolName: student.schoolName ?? "",
       grade: student.grade ?? "",
       classGroupId: primaryClass?.classGroupId ?? "",
-      classGroupIds: displayMemberships.map((membership) => membership.classGroupId),
+      classGroupIds: visibleMemberships.map((membership) => membership.classGroupId),
       classGroupName,
       subject: student.subject ?? "",
       currentLevel: student.currentLevel ?? "",
@@ -307,6 +312,15 @@ function cleanFilterList(value?: string) {
 
 function sheetOptionLabel(options: Array<{ value: string; label: string }>, value: string) {
   return options.find((option) => option.value === value)?.label ?? value;
+}
+
+function uniqueStudentClassMemberships<T extends { classGroupId: string }>(memberships: T[]) {
+  const seen = new Set<string>();
+  return memberships.filter((membership) => {
+    if (seen.has(membership.classGroupId)) return false;
+    seen.add(membership.classGroupId);
+    return true;
+  });
 }
 
 function summarizeClassGroups(names: string[]) {
