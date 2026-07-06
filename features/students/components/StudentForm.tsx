@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { createStudent } from "@/features/students/actions/studentActions";
+import StudentClassGroupDropdownField from "@/features/students/components/StudentClassGroupDropdownField";
 import PhoneInput from "@/components/PhoneInput";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -36,6 +37,8 @@ export default async function NewStudentPage({ searchParams }: Props) {
   ]);
   const teachers = staff.filter((member) => member.role === "TEACHER" || member.role === "MANAGER" || member.role === "ADMIN");
   const defaultClassGroupId = classGroups.some((classGroup) => classGroup.id === sp.classGroupId) ? sp.classGroupId ?? "" : "";
+  const operatingClassGroups = classGroups.filter((classGroup) => !isEndedClassGroup(classGroup));
+  const endedClassGroups = classGroups.filter(isEndedClassGroup);
 
   return (
     <main style={page}>
@@ -49,14 +52,22 @@ export default async function NewStudentPage({ searchParams }: Props) {
 
         <form action={createStudent} className="asc-form-grid" style={form}>
           <Input label="이름" name="name" required />
-          <Select label="소속 반" name="classGroupId" defaultValue={defaultClassGroupId}>
-            <option value="">미지정</option>
-            {classGroups.map((classGroup) => (
-              <option key={classGroup.id} value={classGroup.id}>
-                {classGroup.teacher?.name ? `${classGroup.teacher.name} / ${classGroup.name}` : classGroup.name}
-              </option>
-            ))}
-          </Select>
+          <label className="asc-field">
+            <span className="asc-field__label">소속 반</span>
+            <StudentClassGroupDropdownField
+              classGroups={operatingClassGroups.map((classGroup) => ({
+                id: classGroup.id,
+                name: classGroup.name,
+                teacherName: classGroup.teacher?.name ?? null,
+              }))}
+              secondaryClassGroups={endedClassGroups.map((classGroup) => ({
+                id: classGroup.id,
+                name: classGroup.name,
+                teacherName: classGroup.teacher?.name ?? null,
+              }))}
+              defaultSelectedIds={defaultClassGroupId ? [defaultClassGroupId] : []}
+            />
+          </label>
           <label className="asc-field">
             <span className="asc-field__label">학생 전화</span>
             <PhoneInput name="phone" className="asc-input" />
@@ -90,6 +101,10 @@ export default async function NewStudentPage({ searchParams }: Props) {
       </section>
     </main>
   );
+}
+
+function isEndedClassGroup(classGroup: { status?: string | null; effectiveStatus?: string | null }) {
+  return classGroup.effectiveStatus === "ENDED" || classGroup.status === "ENDED";
 }
 
 const page: CSSProperties = { padding: 12, color: "var(--asc-text)", background: "var(--asc-bg-subtle)", minHeight: "100vh" };

@@ -1636,14 +1636,9 @@ export default function StudentLessonSpreadsheet({
     const currentIds = classGroupDraftIdList(row);
     const nextIds = currentIds.includes(classGroupId) ? currentIds.filter((id) => id !== classGroupId) : [...currentIds, classGroupId];
     setMetaClassGroups(row, nextIds);
-    const key = lessonCellKey(row.id, "classGroup");
-    setEditingMetaKey(key);
+    setEditingMetaKey(lessonCellKey(row.id, "classGroup"));
   }
 
-  function finishClassGroupSelection() {
-    activeRangeEditRef.current = null;
-    setEditingMetaKey(null);
-  }
   function normalizeClassGroupIds(classGroupIds: string[]) {
     const allowedIds = new Set(classGroups.map((classGroup) => classGroup.id));
     return Array.from(new Set(classGroupIds.filter((id) => allowedIds.has(id))));
@@ -2827,12 +2822,13 @@ export default function StudentLessonSpreadsheet({
   }
 
   function toggleSelectedClassTest(testId: string) {
+    const currentVisibleIds = selectedClassTests.map((test) => test.id);
+    const nextIds = visibleTestIdSet.has(testId)
+      ? currentVisibleIds.filter((id) => id !== testId)
+      : [...currentVisibleIds, testId];
     setTestViewUserControlled(true);
     setTestViewMode("selected");
-    setSelectedTestIds((current) => {
-      const baseIds = allTestsSelected ? classTests.map((test) => test.id) : current;
-      return baseIds.includes(testId) ? baseIds.filter((id) => id !== testId) : [...baseIds, testId];
-    });
+    setSelectedTestIds(nextIds);
   }
 
   function selectAllClassTestsForView() {
@@ -2948,10 +2944,18 @@ export default function StudentLessonSpreadsheet({
                               {classTests.map((test) => {
                                 const checked = visibleTestIdSet.has(test.id);
                                 return (
-                                  <label key={test.id} style={{ ...testChecklistLabel, ...(checked ? testChecklistLabelChecked : {}) }}>
-                                    <input type="checkbox" checked={checked} onChange={() => toggleSelectedClassTest(test.id)} />
+                                  <button
+                                    key={test.id}
+                                    type="button"
+                                    style={{ ...testChecklistLabel, ...(checked ? testChecklistLabelChecked : {}) }}
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={() => toggleSelectedClassTest(test.id)}
+                                    role="menuitemcheckbox"
+                                    aria-checked={checked}
+                                  >
+                                    <span style={{ ...testChecklistCheck, ...(checked ? testChecklistCheckOn : {}) }}>{checked ? "✓" : ""}</span>
                                     <span style={testChecklistText}>{classTestOptionLabel(test, lessons)}</span>
-                                  </label>
+                                  </button>
                                 );
                               })}
                             </div>
@@ -3550,6 +3554,7 @@ export default function StudentLessonSpreadsheet({
                             }
                           }}
                           onDoubleClick={() => {
+                            if (isClassGroupCell) return;
                             beginEditMeta(row, column.id);
                           }}
                           onContextMenu={(event) => openContextMenu(event, rowIndex, colIndex)}
@@ -3609,51 +3614,55 @@ export default function StudentLessonSpreadsheet({
                                 if (event.key === "Escape") cancelMetaEdit(row, "classGroup");
                               }}
                             >
-                              <div style={classGroupCellEditorList}>
-                                <div style={classGroupCellGroupTitle}>운영중인 강의</div>
+                              <button
+                                type="button"
+                                style={classGroupCellFloatingIconButton}
+                                onClick={() => setClassGroupEditorEndedOpen((current) => !current)}
+                                aria-label={classGroupEditorEndedOpen ? "끝난 강의 접기" : "끝난 강의 펼치기"}
+                                title={classGroupEditorEndedOpen ? "접기" : "펼치기"}
+                              >
+                                {classGroupEditorEndedOpen ? "⌃" : "☰"}
+                              </button>
+                              <div style={classGroupCellEditorList} role="listbox" aria-multiselectable="true">
                                 {operatingClassGroups.map((option) => {
                                   const checked = classGroupDraftIdList(row).includes(option.id);
-                                  const meta = [option.subject, option.grade, option.teacherName].filter(Boolean).join(" / ");
                                   return (
-                                    <label key={option.id} style={{ ...classGroupCellOption, ...(checked ? classGroupCellOptionChecked : {}) }}>
-                                      <input type="checkbox" checked={checked} onChange={() => toggleMetaClassGroup(row, option.id)} disabled={isPending} />
-                                      <span style={classGroupCellOptionText}>
-                                        <span style={classGroupCellOptionName}>{option.name}</span>
-                                        {meta ? <span style={classGroupCellOptionMeta}>{meta}</span> : null}
-                                      </span>
-                                    </label>
+                                    <button
+                                      key={option.id}
+                                      type="button"
+                                      style={{ ...classGroupCellOption, ...(checked ? classGroupCellOptionChecked : {}) }}
+                                      onClick={() => toggleMetaClassGroup(row, option.id)}
+                                      disabled={isPending}
+                                      role="option"
+                                      aria-selected={checked}
+                                    >
+                                      <span style={{ ...classGroupCellCheck, ...(checked ? classGroupCellCheckOn : {}) }}>{checked ? "✓" : ""}</span>
+                                      <span style={classGroupCellOptionName}>{option.teacherName ? `${option.teacherName} / ${option.name}` : option.name}</span>
+                                    </button>
                                   );
                                 })}
                                 {operatingClassGroups.length === 0 ? <div style={classGroupCellEmpty}>운영중인 강의가 없습니다.</div> : null}
-                                <button
-                                  type="button"
-                                  style={classGroupCellGroupToggle}
-                                  onClick={() => setClassGroupEditorEndedOpen((current) => !current)}
-                                >
-                                  <span>끝난 강의</span>
-                                  <span>{endedClassGroups.length}개 {classGroupEditorEndedOpen ? "접기" : "펼치기"}</span>
-                                </button>
                                 {classGroupEditorEndedOpen
                                   ? endedClassGroups.length > 0
                                     ? endedClassGroups.map((option) => {
                                         const checked = classGroupDraftIdList(row).includes(option.id);
-                                        const meta = [option.subject, option.grade, option.teacherName].filter(Boolean).join(" / ");
                                         return (
-                                          <label key={option.id} style={{ ...classGroupCellOption, ...(checked ? classGroupCellOptionChecked : {}) }}>
-                                            <input type="checkbox" checked={checked} onChange={() => toggleMetaClassGroup(row, option.id)} disabled={isPending} />
-                                            <span style={classGroupCellOptionText}>
-                                              <span style={classGroupCellOptionName}>{option.name}</span>
-                                              {meta ? <span style={classGroupCellOptionMeta}>{meta}</span> : null}
-                                            </span>
-                                          </label>
+                                          <button
+                                            key={option.id}
+                                            type="button"
+                                            style={{ ...classGroupCellOption, ...(checked ? classGroupCellOptionChecked : {}) }}
+                                            onClick={() => toggleMetaClassGroup(row, option.id)}
+                                            disabled={isPending}
+                                            role="option"
+                                            aria-selected={checked}
+                                          >
+                                            <span style={{ ...classGroupCellCheck, ...(checked ? classGroupCellCheckOn : {}) }}>{checked ? "✓" : ""}</span>
+                                            <span style={classGroupCellOptionName}>{option.teacherName ? `${option.teacherName} / ${option.name}` : option.name}</span>
+                                          </button>
                                         );
                                       })
                                     : <div style={classGroupCellEmpty}>끝난 강의가 없습니다.</div>
                                   : null}
-                              </div>
-                              <div style={classGroupCellEditorActions}>
-                                <button type="button" onClick={() => setMetaClassGroups(row, [])} style={classGroupCellMiniButton} disabled={isPending}>해제</button>
-                                <button type="button" onClick={finishClassGroupSelection} style={classGroupCellMiniButton}>확인</button>
                               </div>
                             </div>
                           ) : isEditingMeta ? (
@@ -3687,7 +3696,27 @@ export default function StudentLessonSpreadsheet({
                               aria-label={`${row.name} ${column.label}`}
                             />
                           ) : (
-                            displayValue
+                            isClassGroupCell ? (
+                              <div style={classGroupCellDisplay}>
+                                <span style={classGroupCellDisplayText}>{displayValue}</span>
+                                <button
+                                  type="button"
+                                  style={classGroupCellOpenButton}
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                  }}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    beginEditMeta(row, "classGroup");
+                                  }}
+                                  aria-label={`${displayName(row)} 반 선택`}
+                                  title="반 선택"
+                                >
+                                  ☰
+                                </button>
+                              </div>
+                            ) : displayValue
                           )}
                         </td>
                       );
@@ -6939,108 +6968,24 @@ const classGroupCellEditor: CSSProperties = {
   maxWidth: 320,
   maxHeight: 260,
   display: "grid",
-  gap: 6,
-  padding: 8,
+  padding: "6px 4px",
   border: "1px solid var(--asc-sheet-border)",
   borderRadius: 6,
   background: "var(--asc-sheet-bg)",
   boxShadow: "0 8px 20px rgba(15, 23, 42, 0.14)",
 };
 
-const classGroupCellEditorList: CSSProperties = {
-  maxHeight: 190,
-  overflowY: "auto",
-  display: "grid",
-  gap: 3,
-};
-
-const classGroupCellGroupTitle: CSSProperties = {
-  padding: "3px 2px 2px",
-  color: "var(--asc-sheet-muted)",
-  fontSize: 11,
-  fontWeight: 900,
-};
-
-const classGroupCellGroupToggle: CSSProperties = {
-  minHeight: 26,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 8,
-  border: 0,
-  borderRadius: 4,
-  background: "var(--asc-bg-subtle)",
-  color: "var(--asc-sheet-text)",
-  padding: "4px 6px",
-  fontSize: 11,
-  fontWeight: 850,
-  cursor: "pointer",
-};
-
-const classGroupCellOption: CSSProperties = {
-  minHeight: 32,
-  display: "grid",
-  gridTemplateColumns: "18px minmax(0, 1fr)",
-  alignItems: "start",
-  gap: 6,
-  padding: "4px",
-  borderRadius: 4,
-  color: "var(--asc-sheet-text)",
-  fontSize: 12,
-  fontWeight: 750,
-};
-
-const classGroupCellOptionChecked: CSSProperties = {
-  background: "var(--asc-sheet-primary-soft)",
-  color: "var(--asc-sheet-primary)",
-};
-
-const classGroupCellOptionText: CSSProperties = {
-  minWidth: 0,
-  display: "grid",
-  gap: 1,
-};
-
-const classGroupCellOptionName: CSSProperties = {
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-};
-
-const classGroupCellOptionMeta: CSSProperties = {
-  overflow: "hidden",
-  color: "var(--asc-sheet-muted)",
-  fontSize: 11,
-  fontWeight: 650,
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-};
-
-const classGroupCellEmpty: CSSProperties = {
-  padding: "6px 4px",
-  color: "var(--asc-sheet-muted)",
-  fontSize: 11,
-  fontWeight: 700,
-};
-
-const classGroupCellEditorActions: CSSProperties = {
-  display: "flex",
-  justifyContent: "flex-end",
-  gap: 6,
-  paddingTop: 4,
-};
-
-const classGroupCellMiniButton: CSSProperties = {
-  height: 26,
-  border: 0,
-  borderRadius: 5,
-  background: "var(--asc-bg-subtle)",
-  color: "var(--asc-text)",
-  padding: "0 8px",
-  fontSize: 11,
-  fontWeight: 850,
-  cursor: "pointer",
-};
+const classGroupCellDisplay: CSSProperties = { minWidth: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) 22px", alignItems: "center", gap: 4 };
+const classGroupCellDisplayText: CSSProperties = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+const classGroupCellOpenButton: CSSProperties = { width: 22, height: 22, display: "grid", placeItems: "center", border: 0, borderRadius: 4, background: "transparent", color: "var(--asc-sheet-muted)", fontSize: 14, fontWeight: 950, lineHeight: 1, cursor: "pointer" };
+const classGroupCellEditorList: CSSProperties = { maxHeight: 248, overflowY: "auto", display: "grid", gap: 0, paddingRight: 28 };
+const classGroupCellFloatingIconButton: CSSProperties = { position: "absolute", top: 6, right: 6, width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", border: 0, borderRadius: 5, background: "var(--asc-bg-subtle)", color: "var(--asc-sheet-text)", fontSize: 12, fontWeight: 950, lineHeight: 1, cursor: "pointer" };
+const classGroupCellOption: CSSProperties = { width: "100%", minHeight: 30, display: "grid", gridTemplateColumns: "18px minmax(0, 1fr)", alignItems: "center", gap: 7, border: 0, borderRadius: 5, background: "transparent", color: "var(--asc-sheet-text)", padding: "5px 7px", fontSize: 12, fontWeight: 850, textAlign: "left", cursor: "pointer" };
+const classGroupCellOptionChecked: CSSProperties = { background: "var(--asc-sheet-primary-soft)", color: "var(--asc-sheet-primary)" };
+const classGroupCellCheck: CSSProperties = { width: 14, color: "var(--asc-sheet-muted)", textAlign: "center", fontSize: 12, fontWeight: 950 };
+const classGroupCellCheckOn: CSSProperties = { color: "var(--asc-sheet-primary)" };
+const classGroupCellOptionName: CSSProperties = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+const classGroupCellEmpty: CSSProperties = { padding: "6px 7px", color: "var(--asc-sheet-muted)", fontSize: 11, fontWeight: 750 };
 
 const cellDisplay: CSSProperties = {
   width: "100%",
@@ -7214,17 +7159,23 @@ const testChecklistMiniButton: CSSProperties = {
 };
 const testChecklistList: CSSProperties = { display: "grid", gap: 4, maxHeight: 300, overflow: "auto" };
 const testChecklistLabel: CSSProperties = {
+  width: "100%",
   minHeight: 32,
   display: "grid",
   gridTemplateColumns: "18px minmax(0, 1fr)",
   alignItems: "center",
   gap: 7,
+  border: 0,
   borderRadius: 4,
+  background: "transparent",
   padding: "5px 6px",
   color: "var(--asc-text)",
   fontSize: 12,
   fontWeight: 700,
+  textAlign: "left",
   cursor: "pointer",
 };
 const testChecklistLabelChecked: CSSProperties = { background: "var(--asc-primary-soft)", color: "var(--asc-primary-hover)" };
+const testChecklistCheck: CSSProperties = { width: 14, color: "var(--asc-text-muted)", textAlign: "center", fontSize: 12, fontWeight: 950 };
+const testChecklistCheckOn: CSSProperties = { color: "var(--asc-primary-hover)" };
 const testChecklistText: CSSProperties = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };

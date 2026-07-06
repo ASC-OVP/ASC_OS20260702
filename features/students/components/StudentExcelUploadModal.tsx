@@ -4,6 +4,7 @@ import type { CSSProperties, ChangeEvent, ClipboardEvent } from "react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createStudentsFromExcelUpload } from "@/features/students/actions/studentActions";
+import StudentClassGroupDropdownField from "@/features/students/components/StudentClassGroupDropdownField";
 import { formatPhoneNumber, normalizePhoneNumber, phoneLastDigits } from "@/lib/phone";
 
 type UploadField = "unused" | "name" | "phone" | "parentPhone" | "schoolName" | "grade" | "subject" | "currentLevel" | "memo" | "classGroupName";
@@ -89,6 +90,7 @@ export default function StudentExcelUploadModal({ classGroups, existingStudents,
   const [isPending, startTransition] = useTransition();
 
   const operatingClassGroups = useMemo(() => classGroups.filter((classGroup) => !isEndedClassGroup(classGroup)), [classGroups]);
+  const endedClassGroups = useMemo(() => classGroups.filter(isEndedClassGroup), [classGroups]);
   const defaultOperatingClassGroupId = useMemo(
     () => (defaultClassGroupId && operatingClassGroups.some((classGroup) => classGroup.id === defaultClassGroupId) ? defaultClassGroupId : null),
     [defaultClassGroupId, operatingClassGroups]
@@ -240,10 +242,6 @@ export default function StudentExcelUploadModal({ classGroups, existingStudents,
     });
   }
 
-  function toggleTargetClassGroup(classGroupId: string) {
-    setTargetClassGroupIds((current) => (current.includes(classGroupId) ? current.filter((id) => id !== classGroupId) : [...current, classGroupId]));
-  }
-
   function downloadSample() {
     const headers = ["학생명", "학생 연락처", "보호자 연락처", "학교", "학년", "과목", "레벨", "기본 메모"];
     const sampleRows = [
@@ -365,14 +363,16 @@ export default function StudentExcelUploadModal({ classGroups, existingStudents,
             <div style={toolbar}>
               <label style={classSelectLabel}>
                 추가할 반
-                <div style={classMultiSelect}>
-                  {operatingClassGroups.map((classGroup) => (
-                    <label key={classGroup.id} style={classMultiOption}>
-                      <input type="checkbox" checked={targetClassGroupIds.includes(classGroup.id)} onChange={() => toggleTargetClassGroup(classGroup.id)} />
-                      <span>{classGroup.teacherName ? `${classGroup.teacherName} / ${classGroup.name}` : classGroup.name}</span>
-                    </label>
-                  ))}
-                  {operatingClassGroups.length === 0 && <span style={emptyClassText}>운영중인 반이 없습니다.</span>}
+                <div style={classDropdownWrap}>
+                  <StudentClassGroupDropdownField
+                    classGroups={operatingClassGroups}
+                    secondaryClassGroups={endedClassGroups}
+                    selectedIds={targetClassGroupIds}
+                    onSelectedIdsChange={setTargetClassGroupIds}
+                    renderHiddenInputs={false}
+                    emptyText="운영중인 반이 없습니다."
+                    placeholder="반 선택"
+                  />
                 </div>
               </label>
               <button type="button" onClick={downloadSample} style={secondaryButton}>샘플 다운로드</button>
@@ -810,9 +810,7 @@ const modalDesc: CSSProperties = { margin: "6px 0 0", color: "var(--asc-text-mut
 const iconButton: CSSProperties = { width: 32, height: 32, border: 0, borderRadius: 0, background: "transparent", fontSize: 22, cursor: "pointer", color: "var(--asc-text)" };
 const toolbar: CSSProperties = { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "10px 18px", borderBottom: "1px solid var(--asc-border-subtle)" };
 const classSelectLabel: CSSProperties = { display: "inline-flex", alignItems: "center", gap: 8, color: "var(--asc-text)", fontSize: 13, fontWeight: 900 };
-const classMultiSelect: CSSProperties = { minWidth: 260, maxWidth: 360, maxHeight: 92, overflowY: "auto", display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 4, padding: 6, borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)" };
-const classMultiOption: CSSProperties = { minWidth: 0, display: "grid", gridTemplateColumns: "18px minmax(0, 1fr)", alignItems: "center", gap: 5, color: "var(--asc-text)", fontSize: 12, fontWeight: 800 };
-const emptyClassText: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 12, fontWeight: 800 };
+const classDropdownWrap: CSSProperties = { width: 300, maxWidth: "42vw" };
 const secondaryButton: CSSProperties = { height: 32, border: "1px solid transparent", borderRadius: "var(--asc-radius-lg)", background: "var(--asc-bg-subtle)", color: "var(--asc-text)", padding: "0 12px", fontWeight: 900, cursor: "pointer" };
 const hintText: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 12, fontWeight: 700 };
 const summaryBar: CSSProperties = { display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "8px 18px", borderBottom: "1px solid var(--asc-border-subtle)", fontSize: 13 };

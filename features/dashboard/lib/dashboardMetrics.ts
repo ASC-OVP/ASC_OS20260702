@@ -95,6 +95,7 @@ export function buildDashboardViewData({
     todayClassIds,
   });
 
+  const hiddenSignalIds = new Set(raw.hiddenSignalIds);
   const inboxItems = sortInboxItems([
     ...buildTaskSignals(raw, user, today),
     ...buildAttendanceSignals({ raw, user, today, todayClasses, todayStudentIds, classNameByStudentId, classIdByStudentId }),
@@ -102,7 +103,7 @@ export function buildDashboardViewData({
     ...buildStudentSignals({ raw, user, classNameByStudentId, classIdByStudentId }),
     ...buildMessageSignals(raw, user),
     ...buildOmrSignals(raw, user),
-  ]).slice(0, DASHBOARD_INBOX_LIMIT);
+  ].filter((item) => !hiddenSignalIds.has(item.id))).slice(0, DASHBOARD_INBOX_LIMIT);
 
   const managementStudents = buildManagementStudents({
     raw,
@@ -111,8 +112,8 @@ export function buildDashboardViewData({
     classNameByStudentId,
   });
 
-  const communication = buildCommunicationWidget(raw);
-  const omrScore = buildOmrWidget(raw);
+  const communication = buildCommunicationWidget(raw, hiddenSignalIds);
+  const omrScore = buildOmrWidget(raw, hiddenSignalIds);
   const recentActivities = buildRecentActivities(raw);
   const urgentCount = inboxItems.filter((item) => item.severity === "critical").length;
   const warningCount = inboxItems.filter((item) => item.severity === "warning").length;
@@ -634,20 +635,22 @@ function buildManagementStudents({
     .slice(0, DASHBOARD_WIDGET_LIMIT);
 }
 
-function buildCommunicationWidget(raw: DashboardRawData): CommunicationWidgetData {
-  const items = raw.messageRecipients.map((recipient) => ({
-    id: recipient.id,
-    title: recipient.student?.name ?? recipient.receiverName,
-    meta: clipDashboardText(`${recipient.job.title} · ${recipient.errorMessage ?? recipient.messageText}`, 82),
-    statusLabel: messageStatusText(recipient.status),
-    severity: recipient.status === "FAILED" ? "critical" as const : "warning" as const,
-    href: "/messages",
-  }));
+function buildCommunicationWidget(raw: DashboardRawData, hiddenSignalIds: Set<string>): CommunicationWidgetData {
+  const items = raw.messageRecipients
+    .filter((recipient) => !hiddenSignalIds.has(`message:${recipient.id}`))
+    .map((recipient) => ({
+      id: recipient.id,
+      title: recipient.student?.name ?? recipient.receiverName,
+      meta: clipDashboardText(`${recipient.job.title} · ${recipient.errorMessage ?? recipient.messageText}`, 82),
+      statusLabel: messageStatusText(recipient.status),
+      severity: recipient.status === "FAILED" ? "critical" as const : "warning" as const,
+      href: "/messages",
+    }));
   return { issueCount: items.length, items: items.slice(0, DASHBOARD_WIDGET_LIMIT) };
 }
 
-function buildOmrWidget(raw: DashboardRawData): OmrScoreWidgetData {
-  const items = raw.omrUploads.map((upload) => {
+function buildOmrWidget(raw: DashboardRawData, hiddenSignalIds: Set<string>): OmrScoreWidgetData {
+  const items = raw.omrUploads.filter((upload) => !hiddenSignalIds.has(`omr:${upload.id}`)).map((upload) => {
     const reviewNeeded = upload.recognizedAnswers.filter((answer) => answer.status === "REVIEW_NEEDED" || answer.status === "MULTIPLE").length + upload.results.reduce((sum, result) => sum + result.reviewNeededCount, 0);
     const failed = upload.recognizeStatus === "FAILED" || upload.gradingStatus === "FAILED";
     return {

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import PhoneInput from "@/components/PhoneInput";
 import { createStudentFromSheet } from "@/features/students/actions/studentActions";
+import StudentClassGroupDropdownField from "@/features/students/components/StudentClassGroupDropdownField";
 
 type ClassGroupOption = { id: string; name: string; teacherName?: string; status?: string | null; effectiveStatus?: string | null };
 
@@ -20,6 +21,7 @@ export default function StudentCreateModal({ classGroups, defaultClassGroupId }:
   const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
   const operatingClassGroups = classGroups.filter((classGroup) => !isEndedClassGroup(classGroup));
+  const endedClassGroups = classGroups.filter(isEndedClassGroup);
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -108,21 +110,12 @@ export default function StudentCreateModal({ classGroups, defaultClassGroupId }:
                 </label>
                 <label style={field}>
                   <span style={label}>소속 반</span>
-                  <input type="hidden" name="classGroupIds" value="" />
-                  <div style={classCheckList}>
-                    {operatingClassGroups.map((classGroup) => (
-                      <label key={classGroup.id} style={classCheckItem}>
-                        <input
-                          type="checkbox"
-                          name="classGroupIds"
-                          value={classGroup.id}
-                          defaultChecked={classGroup.id === defaultClassGroupId}
-                        />
-                        <span>{classGroup.teacherName ? `${classGroup.teacherName} / ${classGroup.name}` : classGroup.name}</span>
-                      </label>
-                    ))}
-                    {operatingClassGroups.length === 0 && <span style={emptyClassText}>운영중인 반이 없습니다.</span>}
-                  </div>
+                  <StudentClassGroupDropdownField
+                    classGroups={operatingClassGroups}
+                    secondaryClassGroups={endedClassGroups}
+                    defaultSelectedIds={defaultClassGroupId ? [defaultClassGroupId] : []}
+                    emptyText="운영중인 반이 없습니다."
+                  />
                 </label>
                 <label style={field}>
                   <span style={label}>학생 연락처</span>
@@ -219,26 +212,6 @@ const fieldGrid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat
 const field: CSSProperties = { display: "grid", gap: 5, minWidth: 0 };
 const label: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 13, fontWeight: 900 };
 const input: CSSProperties = { width: "100%", minHeight: 36, border: "1px solid transparent", borderRadius: 8, background: "var(--asc-bg-subtle)", color: "var(--asc-text)", padding: "7px 10px", fontSize: 14, fontWeight: 800, boxSizing: "border-box" };
-const classCheckList: CSSProperties = {
-  minHeight: 36,
-  maxHeight: 120,
-  overflow: "auto",
-  display: "grid",
-  gap: 4,
-  padding: 6,
-  borderRadius: 8,
-  background: "var(--asc-bg-subtle)",
-};
-const classCheckItem: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 7,
-  minWidth: 0,
-  fontSize: 13,
-  fontWeight: 850,
-  color: "var(--asc-text)",
-};
-const emptyClassText: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 12, fontWeight: 800 };
 const textarea: CSSProperties = { minHeight: 76, resize: "vertical" };
 const messageText: CSSProperties = { margin: 0, color: "var(--asc-text-muted)", fontSize: 13, fontWeight: 800 };
 const actions: CSSProperties = { display: "flex", justifyContent: "flex-end", gap: 8 };

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { updateStudent } from "@/features/students/actions/studentActions";
 import PhoneInput from "@/components/PhoneInput";
+import StudentClassGroupDropdownField from "@/features/students/components/StudentClassGroupDropdownField";
 
 type PageProps = { params: Promise<{ studentId: string }> };
 
@@ -31,7 +32,9 @@ export default async function EditStudentPage({ params }: PageProps) {
 
   const teachers = staff.filter((member) => member.role === "TEACHER" || member.role === "MANAGER" || member.role === "ADMIN");
   const assistants = staff.filter((member) => member.role === "ASSISTANT");
-  const classGroupId = student.studentClasses[0]?.classGroupId ?? "";
+  const classGroupIds = student.studentClasses.filter((membership) => membership.status === "ACTIVE").map((membership) => membership.classGroupId);
+  const operatingClassGroups = classGroups.filter((classGroup) => !isEndedClassGroup(classGroup));
+  const endedClassGroups = classGroups.filter(isEndedClassGroup);
 
   return (
     <main style={page}>
@@ -44,14 +47,19 @@ export default async function EditStudentPage({ params }: PageProps) {
               <input type="hidden" name="studentId" value={student.id} />
               <label style={label}>이름<input name="name" required defaultValue={student.name} style={input} /></label>
               <label style={label}>소속 반
-                <select name="classGroupId" defaultValue={classGroupId} style={input}>
-                  <option value="">미지정</option>
-                  {classGroups.map((classGroup) => (
-                    <option key={classGroup.id} value={classGroup.id}>
-                      {classGroup.teacher?.name ? `${classGroup.teacher.name} / ${classGroup.name}` : classGroup.name}
-                    </option>
-                  ))}
-                </select>
+                <StudentClassGroupDropdownField
+                  classGroups={operatingClassGroups.map((classGroup) => ({
+                    id: classGroup.id,
+                    name: classGroup.name,
+                    teacherName: classGroup.teacher?.name ?? null,
+                  }))}
+                  secondaryClassGroups={endedClassGroups.map((classGroup) => ({
+                    id: classGroup.id,
+                    name: classGroup.name,
+                    teacherName: classGroup.teacher?.name ?? null,
+                  }))}
+                  defaultSelectedIds={classGroupIds}
+                />
               </label>
               <label style={label}>연락처<PhoneInput name="phone" defaultValue={student.phone} style={input} /></label>
               <label style={label}>보호자 연락처<PhoneInput name="parentPhone" defaultValue={student.parentPhone} style={input} /></label>
@@ -89,4 +97,8 @@ export default async function EditStudentPage({ params }: PageProps) {
         </section>
     </main>
   );
+}
+
+function isEndedClassGroup(classGroup: { status?: string | null; effectiveStatus?: string | null }) {
+  return classGroup.effectiveStatus === "ENDED" || classGroup.status === "ENDED";
 }

@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Badge, Button, ButtonLink, EmptyState, Input, Select } from "@/components/ui";
+import { hideOperationalQueueItem } from "@/features/dashboard/actions/dashboardActions";
 import { DASHBOARD_SEVERITY_ORDER, DASHBOARD_SIGNAL_LABELS } from "@/features/dashboard/constants";
 import type {
   DashboardFilterOption,
@@ -45,20 +46,36 @@ export default function DashboardClient({ data }: { data: DashboardViewData }) {
   const [filters, setFilters] = useState<DashboardFilterState>(defaultFilters);
   const [tab, setTab] = useState<(typeof inboxTabs)[number]["value"]>("all");
   const [selectedId, setSelectedId] = useState<string | null>(data.inboxItems[0]?.id ?? null);
+  const [hiddenInboxIds, setHiddenInboxIds] = useState<string[]>([]);
+  const [, startHideTransition] = useTransition();
 
-  const filteredItems = useMemo(() => filterInboxItems(data.inboxItems, filters, tab, data.today), [data.inboxItems, data.today, filters, tab]);
+  const visibleInboxItems = useMemo(
+    () => data.inboxItems.filter((item) => !hiddenInboxIds.includes(item.id)),
+    [data.inboxItems, hiddenInboxIds]
+  );
+  const filteredItems = useMemo(() => filterInboxItems(visibleInboxItems, filters, tab, data.today), [data.today, filters, tab, visibleInboxItems]);
   const selectedItem = filteredItems.find((item) => item.id === selectedId) ?? filteredItems[0] ?? null;
   const activeFilterCount = countActiveFilters(filters);
-  const criticalCount = data.inboxItems.filter((item) => item.severity === "critical").length;
-  const dueTodayCount = data.inboxItems.filter((item) => item.dateScope === "today" || item.dueKey === data.today || item.dateKey === data.today).length;
-  const mineCount = data.inboxItems.filter((item) => item.isMine).length;
+  const criticalCount = visibleInboxItems.filter((item) => item.severity === "critical").length;
+  const dueTodayCount = visibleInboxItems.filter((item) => item.dateScope === "today" || item.dueKey === data.today || item.dateKey === data.today).length;
+  const mineCount = visibleInboxItems.filter((item) => item.isMine).length;
+
+  function hideInboxItem(id: string) {
+    setHiddenInboxIds((current) => (current.includes(id) ? current : [...current, id]));
+    if (selectedId === id) setSelectedId(null);
+    startHideTransition(() => {
+      void hideOperationalQueueItem(id).catch(() => {
+        setHiddenInboxIds((current) => current.filter((itemId) => itemId !== id));
+      });
+    });
+  }
 
   return (
     <section style={pageStack}>
       <DashboardScopeBar
         data={data}
         filteredCount={filteredItems.length}
-        totalCount={data.inboxItems.length}
+        totalCount={visibleInboxItems.length}
         criticalCount={criticalCount}
         dueTodayCount={dueTodayCount}
         mineCount={mineCount}
@@ -76,7 +93,7 @@ export default function DashboardClient({ data }: { data: DashboardViewData }) {
       <section id="dashboard-inbox" style={mainGrid} aria-label="오늘의 운영 큐와 선택 항목 상세">
         <OperationsInboxPanel
           items={filteredItems}
-          totalCount={data.inboxItems.length}
+          totalCount={visibleInboxItems.length}
           tab={tab}
           setTab={setTab}
           filters={filters}
@@ -84,6 +101,7 @@ export default function DashboardClient({ data }: { data: DashboardViewData }) {
           data={data}
           selectedId={selectedItem?.id ?? null}
           onSelect={setSelectedId}
+          onHide={hideInboxItem}
           activeFilterCount={activeFilterCount}
         />
         <DashboardDetailPanel item={selectedItem} />
@@ -241,6 +259,7 @@ function OperationsInboxPanel({
   data,
   selectedId,
   onSelect,
+  onHide,
   activeFilterCount,
 }: {
   items: OperationsInboxItem[];
@@ -252,6 +271,7 @@ function OperationsInboxPanel({
   data: DashboardViewData;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  onHide: (id: string) => void;
   activeFilterCount: number;
 }) {
   return (
@@ -317,7 +337,7 @@ function OperationsInboxPanel({
           </div>
         ) : (
           items.map((item) => (
-            <InboxListRow key={item.id} item={item} active={item.id === selectedId} onSelect={onSelect} />
+            <InboxListRow key={item.id} item={item} active={item.id === selectedId} onSelect={onSelect} onHide={onHide} />
           ))
         )}
       </div>
@@ -325,17 +345,39 @@ function OperationsInboxPanel({
   );
 }
 
-function InboxListRow({ item, active, onSelect }: { item: OperationsInboxItem; active: boolean; onSelect: (id: string) => void }) {
+function InboxListRow({
+  item,
+  active,
+  onSelect,
+  onHide,
+}: {
+  item: OperationsInboxItem;
+  active: boolean;
+  onSelect: (id: string) => void;
+  onHide: (id: string) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+
   function openItem() {
     window.location.href = item.href;
   }
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       style={active ? activeQueueRow : queueRow}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setHovered(true)}
+      onBlur={() => setHovered(false)}
       onClick={() => onSelect(item.id)}
       onDoubleClick={openItem}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        onSelect(item.id);
+      }}
       aria-pressed={active}
       aria-label={`${severityLabel(item.severity)} ${DASHBOARD_SIGNAL_LABELS[item.type]} 업무 선택: ${item.title}`}
       title="더블클릭해서 관련 화면으로 이동"
@@ -349,7 +391,19 @@ function InboxListRow({ item, active, onSelect }: { item: OperationsInboxItem; a
       <span style={queueMutedCell}>{item.ownerLabel}</span>
       <span style={item.timeLabel.includes("마감") ? queueDueCell : queueMutedCell}>{item.timeLabel}</span>
       <span style={queueStatusCell}>{item.statusLabel}</span>
-    </button>
+      <button
+        type="button"
+        style={{ ...queueHideButton, ...(hovered ? queueHideButtonVisible : {}) }}
+        onClick={(event) => {
+          event.stopPropagation();
+          onHide(item.id);
+        }}
+        aria-label={`${item.title} 운영 큐에서 숨김`}
+        title="운영 큐에서 숨김"
+      >
+        ×
+      </button>
+    </div>
   );
 }
 
@@ -761,8 +815,10 @@ const queueSelect: CSSProperties = { minHeight: 30, padding: "5px 8px", fontSize
 const queueColumns = "86px 64px minmax(170px, 1.25fr) minmax(124px, .85fr) minmax(70px, .55fr) minmax(90px, .65fr) minmax(70px, .5fr)";
 const inboxList: CSSProperties = { border: surfaceBorder, borderRadius: 8, overflow: "auto", maxHeight: 470, background: "var(--asc-surface)", boxShadow: "var(--asc-shadow-sm)" };
 const queueHead: CSSProperties = { display: "grid", gridTemplateColumns: queueColumns, alignItems: "center", minWidth: 760, position: "sticky", top: 0, zIndex: 1, background: "var(--asc-bg-subtle)", borderBottom: "1px solid var(--asc-row-divider)", color: "var(--asc-text-muted)", fontSize: 11, fontWeight: 950, padding: "7px 10px" };
-const queueRow: CSSProperties = { width: "100%", minWidth: 760, minHeight: 42, display: "grid", gridTemplateColumns: queueColumns, alignItems: "center", borderWidth: 0, borderBottomWidth: 1, borderBottomStyle: "solid", borderBottomColor: "var(--asc-row-divider)", background: "var(--asc-surface)", color: "var(--asc-text)", padding: "8px 10px", textAlign: "left", cursor: "pointer", font: "inherit" };
+const queueRow: CSSProperties = { position: "relative", width: "100%", minWidth: 760, minHeight: 42, display: "grid", gridTemplateColumns: queueColumns, alignItems: "center", borderWidth: 0, borderBottomWidth: 1, borderBottomStyle: "solid", borderBottomColor: "var(--asc-row-divider)", background: "var(--asc-surface)", color: "var(--asc-text)", padding: "8px 38px 8px 10px", textAlign: "left", cursor: "pointer", font: "inherit" };
 const activeQueueRow: CSSProperties = { ...queueRow, background: "var(--asc-accent-soft)", boxShadow: "inset 3px 0 0 var(--asc-accent)" };
+const queueHideButton: CSSProperties = { position: "absolute", right: 8, width: 22, height: 22, display: "grid", placeItems: "center", border: 0, borderRadius: 4, background: "var(--asc-danger-soft)", color: "var(--asc-danger)", fontSize: 16, fontWeight: 950, lineHeight: 1, cursor: "pointer", opacity: 0, pointerEvents: "none" };
+const queueHideButtonVisible: CSSProperties = { opacity: 1, pointerEvents: "auto" };
 const inboxEmpty: CSSProperties = { padding: 12 };
 const queuePriorityCell: CSSProperties = { minWidth: 0, display: "flex", alignItems: "center" };
 const queueTypeCell: CSSProperties = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--asc-text-subtle)", fontSize: 12, fontWeight: 950 };

@@ -34,6 +34,7 @@ export async function getDashboardData({ user, today }: { user: DashboardQueryUs
     classTaskCounts,
     messageRecipients,
     omrUploads,
+    operationalQueueHiddenItems,
   ] = await Promise.all([
     prisma.student.count({ where: { academyId } }),
     prisma.student.count({ where: { academyId, status: "ACTIVE" } }),
@@ -253,6 +254,11 @@ export async function getDashboardData({ user, today }: { user: DashboardQueryUs
       orderBy: { updatedAt: "desc" },
       take: DASHBOARD_WIDGET_LIMIT,
     }),
+    prisma.$queryRaw<Array<{ signalId: string }>>`
+      SELECT "signalId"
+      FROM "OperationalQueueAcknowledgement"
+      WHERE "academyId" = ${academyId}
+    `,
   ]);
 
   return {
@@ -276,6 +282,7 @@ export async function getDashboardData({ user, today }: { user: DashboardQueryUs
     classTaskCounts,
     messageRecipients,
     omrUploads,
+    hiddenSignalIds: operationalQueueHiddenItems.map((item) => item.signalId),
   };
 }
 

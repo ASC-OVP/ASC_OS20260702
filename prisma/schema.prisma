@@ -38,6 +38,7 @@ model Academy {
   smsConsents          SmsConsent[]
   smsProviderLogs      SmsProviderLog[]
   smsProviderSettings  SmsProviderSetting[]
+  operationalQueueHiddenItems OperationalQueueHiddenItem[]
   omrUploads           OmrUpload[]
   exams                Exam[]
   examResults          ExamResult[]
@@ -109,6 +110,7 @@ model User {
   counselingRecords       CounselingRecord[]    @relation("CounselingOwner")
   clinicRecords           ClinicRecord[]        @relation("ClinicOwner")
   questionRecords         QuestionRecord[]      @relation("QuestionOwner")
+  operationalQueueHiddenItems OperationalQueueHiddenItem[] @relation("OperationalQueueHiddenBy")
 
   @@unique([academyId, loginId])
   @@index([academyId])
@@ -860,6 +862,23 @@ model SmsProviderLog {
   @@index([recipientId])
   @@index([provider])
   @@index([status])
+}
+
+model OperationalQueueHiddenItem {
+  id               String   @id @default(uuid())
+  academyId        String
+  signalId         String
+  hiddenById       String?  @map("acknowledgedById")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  academy  Academy @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  hiddenBy User?   @relation("OperationalQueueHiddenBy", fields: [hiddenById], references: [id], onDelete: SetNull)
+
+  @@unique([academyId, signalId], map: "OperationalQueueAcknowledgement_academyId_signalId_key")
+  @@index([academyId], map: "OperationalQueueAcknowledgement_academyId_idx")
+  @@index([hiddenById], map: "OperationalQueueAcknowledgement_acknowledgedById_idx")
+  @@map("OperationalQueueAcknowledgement")
 }
 
 enum AnnouncementPriority {

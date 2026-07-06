@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import PhoneInput from "@/components/PhoneInput";
 import SchoolScoreRecordRow from "@/features/students/components/SchoolScoreRecordRow";
+import StudentClassGroupDropdownField from "@/features/students/components/StudentClassGroupDropdownField";
 import { todayKoreaDate } from "@/lib/date";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
@@ -143,6 +144,20 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
   const selectedClassGroupIds = new Set(
     student.studentClasses.filter((membership) => membership.status === "ACTIVE").map((membership) => membership.classGroupId)
   );
+  const operatingClassGroupOptions = classGroups
+    .filter((classGroup) => !isEndedClassGroupOption(classGroup))
+    .map((classGroup) => ({
+      id: classGroup.id,
+      name: classGroup.name,
+      teacherName: classGroup.teacher?.name ?? null,
+    }));
+  const endedClassGroupOptions = classGroups
+    .filter(isEndedClassGroupOption)
+    .map((classGroup) => ({
+      id: classGroup.id,
+      name: classGroup.name,
+      teacherName: classGroup.teacher?.name ?? null,
+    }));
   const filteredMemos = memoQ
     ? student.memos.filter((memo) =>
         [memo.content, memo.writer.name, memoTypeText(memo.type)].join(" ").toLocaleLowerCase("ko-KR").includes(memoQ.toLocaleLowerCase("ko-KR"))
@@ -204,16 +219,11 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                   <Field label="학교"><input name="schoolName" defaultValue={student.schoolName ?? ""} style={miniInput} /></Field>
                   <Field label="학년"><input name="grade" defaultValue={student.grade ?? ""} style={miniInput} /></Field>
                   <Field label="소속 반">
-                    <input type="hidden" name="classGroupIds" value="" />
-                    <div style={classCheckList}>
-                      {classGroups.map((classGroup) => (
-                        <label key={classGroup.id} style={classCheckItem}>
-                          <input type="checkbox" name="classGroupIds" value={classGroup.id} defaultChecked={selectedClassGroupIds.has(classGroup.id)} />
-                          <span>{classGroup.teacher?.name ? `${classGroup.teacher.name} / ${classGroup.name}` : classGroup.name}</span>
-                        </label>
-                      ))}
-                      {classGroups.length === 0 && <span style={emptyClassText}>선택 가능한 반이 없습니다.</span>}
-                    </div>
+                    <StudentClassGroupDropdownField
+                      classGroups={operatingClassGroupOptions}
+                      secondaryClassGroups={endedClassGroupOptions}
+                      defaultSelectedIds={[...selectedClassGroupIds]}
+                    />
                   </Field>
                   <Field label="담당 강사">
                     <select name="teacherId" defaultValue={student.teacherId ?? ""} style={miniInput}>
@@ -822,6 +832,10 @@ function statusBadge(status: string): CSSProperties {
   return softBadge;
 }
 
+function isEndedClassGroupOption(classGroup: { status?: string | null; effectiveStatus?: string | null }) {
+  return classGroup.effectiveStatus === "ENDED" || classGroup.status === "ENDED";
+}
+
 function formatDate(date: Date) {
   return date.toISOString().slice(0, 10);
 }
@@ -855,9 +869,6 @@ const successBadge: CSSProperties = { ...softBadge, background: "var(--asc-succe
 const infoGrid: CSSProperties = { display: "grid", gap: 2 };
 const fieldRow: CSSProperties = { display: "grid", gridTemplateColumns: "112px 1fr", alignItems: "center", gap: 8, minHeight: 38, borderBottom: "1px solid var(--asc-row-divider)", color: "var(--asc-text-muted)", fontSize: 13, fontWeight: 900 };
 const miniInput: CSSProperties = { width: "100%", height: 34, border: "1px solid var(--asc-border-subtle)", borderRadius: "var(--asc-radius-md)", background: "var(--asc-surface)", color: "var(--asc-text)", padding: "0 9px", fontWeight: 850 };
-const classCheckList: CSSProperties = { maxHeight: 132, overflowY: "auto", display: "grid", gap: 4, padding: "5px 0" };
-const classCheckItem: CSSProperties = { minHeight: 26, display: "grid", gridTemplateColumns: "18px minmax(0, 1fr)", alignItems: "center", gap: 6, color: "var(--asc-text)", fontSize: 12, fontWeight: 850 };
-const emptyClassText: CSSProperties = { color: "var(--asc-text-soft)", fontSize: 12, fontWeight: 850 };
 const twoInline: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 };
 const textarea: CSSProperties = { width: "100%", border: "1px solid var(--asc-border-subtle)", borderRadius: "var(--asc-radius-md)", padding: 10, resize: "vertical", background: "var(--asc-surface)", color: "var(--asc-text)", fontWeight: 850 };
 const memoLabel: CSSProperties = { display: "grid", gap: 6, color: "var(--asc-text-muted)", fontSize: 13, fontWeight: 900 };
