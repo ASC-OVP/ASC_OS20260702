@@ -17,7 +17,7 @@ export async function createClassGroupAction(formData: FormData) {
     redirect(createdClassGroupId ? `/classes?classGroupId=${createdClassGroupId}` : "/classes");
   } catch (error) {
     const errorParam = classGroupCreateErrorParam(error);
-    if (errorParam) redirect(`/classes/new?error=${errorParam}`);
+    if (errorParam) redirect(`/classes?create=1&error=${errorParam}`);
     throw error;
   }
 }
@@ -377,7 +377,6 @@ function compactSchedule(daysOfWeek: string | null, startTime: string | null, en
 function revalidateClassPaths(classGroupId?: string | null) {
   revalidatePath("/students");
   revalidatePath("/classes");
-  revalidatePath("/classes/new");
   revalidatePath("/calendar");
   if (classGroupId) revalidatePath(`/classes/${classGroupId}`);
 }

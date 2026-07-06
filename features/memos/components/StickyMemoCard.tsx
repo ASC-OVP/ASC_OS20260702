@@ -176,7 +176,9 @@ function ColorPalette({ current, onChange }: { current: string; onChange: (color
 }
 
 const sticky: CSSProperties = {
-  border: "1px solid rgba(146,64,14,.16)",
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "rgba(146,64,14,.16)",
   borderRadius: "var(--asc-radius-md)",
   padding: 10,
   display: "grid",
@@ -202,7 +204,9 @@ const swatch: CSSProperties = {
   width: 17,
   height: 17,
   borderRadius: "var(--asc-radius-sm)",
-  border: "1px solid rgba(17,24,39,.2)",
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "rgba(17,24,39,.2)",
   display: "grid",
   placeItems: "center",
   padding: 0,

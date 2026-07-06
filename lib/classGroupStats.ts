@@ -1,3 +1,5 @@
+import { parseClassDaysOfWeek } from "@/lib/classGroups";
+
 type ScoreRecordLike = {
   date: string;
   title: string;
@@ -24,6 +26,17 @@ type AssignmentRecordLike = {
   status: string;
 };
 
+type ClassScheduleLike = {
+  startDate?: string | null;
+  endDate?: string | null;
+  daysOfWeek?: string | null;
+};
+
+type StudentClassPeriodLike = {
+  joinedAt?: string | null;
+  leftAt?: string | null;
+};
+
 export type ClassStatsStudent = {
   id: string;
   name: string;
@@ -32,6 +45,19 @@ export type ClassStatsStudent = {
   attendanceRecords: AttendanceRecordLike[];
   assignmentRecords: AssignmentRecordLike[];
 };
+
+export function filterStudentActivityForClassSchedule<T extends Pick<ClassStatsStudent, "scoreRecords" | "attendanceRecords" | "assignmentRecords">>(
+  student: T,
+  classGroup: ClassScheduleLike,
+  membership?: StudentClassPeriodLike | null
+): T {
+  return {
+    ...student,
+    scoreRecords: student.scoreRecords.filter((record) => isClassActivityDate(record.date, classGroup, membership)),
+    attendanceRecords: student.attendanceRecords.filter((record) => isClassActivityDate(record.date, classGroup, membership)),
+    assignmentRecords: student.assignmentRecords.filter((record) => isClassActivityDate(record.date, classGroup, membership)),
+  };
+}
 
 export type ClassStats = {
   studentCount: number;
@@ -307,4 +333,24 @@ function fallbackAttendanceMeta(status: string) {
 
 function round1(value: number) {
   return Math.round(value * 10) / 10;
+}
+
+function isClassActivityDate(date: string, classGroup: ClassScheduleLike, membership?: StudentClassPeriodLike | null) {
+  if (classGroup.startDate && date < classGroup.startDate) return false;
+  if (classGroup.endDate && date > classGroup.endDate) return false;
+  if (membership?.joinedAt && date < membership.joinedAt) return false;
+  if (membership?.leftAt && date > membership.leftAt) return false;
+
+  const daysOfWeek = parseClassDaysOfWeek(classGroup.daysOfWeek);
+  if (daysOfWeek.length === 0) return true;
+
+  const parsedDate = parseYmd(date);
+  return parsedDate ? daysOfWeek.includes(parsedDate.getDay()) : false;
+}
+
+function parseYmd(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const [, year, month, day] = match;
+  return new Date(Number(year), Number(month) - 1, Number(day));
 }

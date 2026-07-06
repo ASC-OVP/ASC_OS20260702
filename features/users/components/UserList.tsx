@@ -3,6 +3,7 @@ import { canDeactivateAccount, canManageStaff, requireUser, roleText } from "@/l
 import type { CSSProperties } from "react";
 import { Badge, Button, Input, Notice, PageHeader, Select } from "@/components/ui";
 import { createUserAction, deleteUserAction } from "@/features/users/actions/userActions";
+import { surfaceBorder } from "@/lib/styles";
 
 type Props = {
   searchParams: Promise<{ error?: string }>;
@@ -102,7 +103,7 @@ function errorMessage(error: string) {
 const page: CSSProperties = { padding: 12, color: "var(--asc-text)", background: "var(--asc-bg-subtle)", minHeight: "100vh" };
 const container: CSSProperties = { width: "100%", maxWidth: "none", margin: 0, display: "grid", gap: 12 };
 const grid: CSSProperties = { display: "grid", gridTemplateColumns: "320px 1fr", gap: 10, alignItems: "start" };
-const card: CSSProperties = { background: "var(--asc-surface)", border: "1px solid transparent", borderRadius: "var(--asc-radius-lg)", padding: 12, boxShadow: "var(--asc-shadow-sm)" };
+const card: CSSProperties = { background: "var(--asc-surface)", border: surfaceBorder, borderRadius: "var(--asc-radius-lg)", padding: 12, boxShadow: "var(--asc-shadow-sm)" };
 const wideCard: CSSProperties = { gridColumn: "1 / -1" };
 const sectionTitle: CSSProperties = { margin: "0 0 8px", fontSize: 16, fontWeight: 950 };
 const form: CSSProperties = { display: "flex", flexDirection: "column", gap: 8 };

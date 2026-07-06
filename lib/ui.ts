@@ -32,12 +32,15 @@ export const desc: CSSProperties = {
   fontSize: 13,
 };
 
+export const surfaceBorder = "1px solid var(--asc-surface-border)";
+export const surfaceShadow = "var(--asc-shadow-sm)";
+
 export const card: CSSProperties = {
   background: "var(--asc-surface)",
-  border: "1px solid transparent",
+  border: surfaceBorder,
   borderRadius: "var(--asc-radius-lg)",
   padding: 12,
-  boxShadow: "var(--asc-shadow-sm)",
+  boxShadow: surfaceShadow,
 };
 
 export const input: CSSProperties = {
@@ -53,7 +56,9 @@ export const input: CSSProperties = {
 export const button: CSSProperties = {
   minHeight: 36,
   padding: "8px 12px",
-  border: "1px solid transparent",
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "transparent",
   borderRadius: "var(--asc-radius-md)",
   background: "var(--asc-primary)",
   color: "#ffffff",
@@ -69,7 +74,6 @@ export const lightButton: CSSProperties = {
   ...button,
   background: "var(--asc-primary-soft)",
   color: "var(--asc-primary-deep)",
-  border: "1px solid transparent",
 };
 
 export const dangerButton: CSSProperties = {
@@ -109,8 +113,8 @@ export const excelTd: CSSProperties = {
 
 export const tableWrap: CSSProperties = {
   overflow: "auto",
-  border: "1px solid transparent",
+  border: surfaceBorder,
   borderRadius: "var(--asc-radius-lg)",
   background: "var(--asc-bg)",
-  boxShadow: "var(--asc-shadow-sm)",
+  boxShadow: surfaceShadow,
 };

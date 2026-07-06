@@ -32,8 +32,8 @@ export default function Sidebar({ academyName, userName, role, collapsed = false
   const pathname = usePathname();
 
   return (
-    <aside style={{ ...sidebarStyle, ...(collapsed ? sidebarCollapsedStyle : {}) }}>
-      <div style={collapsed ? brandCollapsedStyle : brandStyle}>
+    <aside className="asc-sidebar" style={{ ...sidebarStyle, ...(collapsed ? sidebarCollapsedStyle : {}) }}>
+      <div className="asc-sidebar__brand" style={collapsed ? brandCollapsedStyle : brandStyle}>
         {!collapsed && (
           <div style={brandText}>
             <div style={logoStyle}>ASC</div>
@@ -43,7 +43,7 @@ export default function Sidebar({ academyName, userName, role, collapsed = false
         {onToggle && (
           <button
             type="button"
-            className="sidebar-toggle"
+            className="sidebar-toggle asc-sidebar__toggle"
             onClick={onToggle}
             style={toggleStyle}
             aria-label={collapsed ? "\uBA54\uB274 \uD3BC\uCE58\uAE30" : "\uBA54\uB274 \uC811\uAE30"}
@@ -53,14 +53,14 @@ export default function Sidebar({ academyName, userName, role, collapsed = false
         )}
       </div>
 
-      <nav style={navStyle}>
+      <nav className="asc-sidebar__nav" style={navStyle}>
         {menus.map((menu) => {
           const active = pathname === menu.href || pathname.startsWith(`${menu.href}/`);
           return (
             <Link
               key={menu.href}
               href={menu.href}
-              className="sidebar-link"
+              className="sidebar-link asc-sidebar__link"
               title={collapsed ? menu.name : undefined}
               aria-label={menu.name}
               aria-current={active ? "page" : undefined}
@@ -69,13 +69,13 @@ export default function Sidebar({ academyName, userName, role, collapsed = false
               style={{ ...menuStyle, ...(collapsed ? menuCollapsedStyle : {}), ...(active ? activeStyle : {}) }}
             >
               <span style={{ ...iconStyle, ...(active ? activeIconStyle : {}) }}>{renderMenuIcon(menu.icon)}</span>
-              {!collapsed && <span style={menuTextStyle}>{menu.name}</span>}
+              <span className="asc-sidebar__link-text" style={collapsed ? { ...menuTextStyle, display: "none" } : menuTextStyle}>{menu.name}</span>
             </Link>
           );
         })}
       </nav>
 
-      <div style={collapsed ? bottomCollapsedStyle : bottomStyle}>
+      <div className="asc-sidebar__bottom" style={collapsed ? bottomCollapsedStyle : bottomStyle}>
         {userName && !collapsed && (
           <div style={userStyle}>
             <b>{userName}</b>
@@ -84,7 +84,7 @@ export default function Sidebar({ academyName, userName, role, collapsed = false
         )}
         <Link
           href="/logout"
-          className="sidebar-link"
+          className="sidebar-link asc-sidebar__logout"
           onMouseDown={(event) => event.currentTarget.blur()}
           onClick={(event) => event.currentTarget.blur()}
           style={collapsed ? logoutCollapsedStyle : logoutStyle}
@@ -272,7 +272,7 @@ const iconStyle: CSSProperties = {
   color: "var(--asc-sidebar-text)",
   flex: "0 0 auto",
 };
-const activeIconStyle: CSSProperties = { background: "var(--asc-primary)", color: "#fff" };
+const activeIconStyle: CSSProperties = { background: "var(--asc-accent)", color: "#fff" };
 const svgIconStyle: CSSProperties = {
   width: 17,
   height: 17,

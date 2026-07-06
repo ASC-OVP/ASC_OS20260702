@@ -1,12 +1,12 @@
 "use client";
 
 import type { CSSProperties, FormEvent } from "react";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import PhoneInput from "@/components/PhoneInput";
 import { createStudentFromSheet } from "@/features/students/actions/studentActions";
 
-type ClassGroupOption = { id: string; name: string; teacherName?: string };
+type ClassGroupOption = { id: string; name: string; teacherName?: string; status?: string | null; effectiveStatus?: string | null };
 
 type Props = {
   classGroups: ClassGroupOption[];
@@ -17,10 +17,25 @@ const grades = ["중1", "중2", "중3", "고1", "고2", "고3", "N수"];
 
 export default function StudentCreateModal({ classGroups, defaultClassGroupId }: Props) {
   const router = useRouter();
+  const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
+  const operatingClassGroups = classGroups.filter((classGroup) => !isEndedClassGroup(classGroup));
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape" || isPending) return;
+      setOpen(false);
+      window.setTimeout(() => triggerButtonRef.current?.focus(), 0);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, isPending]);
 
   function openModal() {
     setMessage("");
@@ -30,6 +45,7 @@ export default function StudentCreateModal({ classGroups, defaultClassGroupId }:
   function closeModal() {
     if (isPending) return;
     setOpen(false);
+    window.setTimeout(() => triggerButtonRef.current?.focus(), 0);
   }
 
   function submitStudent(event: FormEvent<HTMLFormElement>) {
@@ -52,7 +68,16 @@ export default function StudentCreateModal({ classGroups, defaultClassGroupId }:
 
   return (
     <>
-      <button type="button" onClick={openModal} style={triggerButton}>
+      <button
+        ref={triggerButtonRef}
+        type="button"
+        onMouseDown={(event) => {
+          if (event.button !== 0) return;
+          openModal();
+        }}
+        onClick={openModal}
+        style={triggerButton}
+      >
         + 학생 추가
       </button>
 
@@ -83,14 +108,21 @@ export default function StudentCreateModal({ classGroups, defaultClassGroupId }:
                 </label>
                 <label style={field}>
                   <span style={label}>소속 반</span>
-                  <select name="classGroupId" defaultValue={defaultClassGroupId ?? ""} style={input}>
-                    <option value="">미지정</option>
-                    {classGroups.map((classGroup) => (
-                      <option key={classGroup.id} value={classGroup.id}>
-                        {classGroup.teacherName ? `${classGroup.teacherName} / ${classGroup.name}` : classGroup.name}
-                      </option>
+                  <input type="hidden" name="classGroupIds" value="" />
+                  <div style={classCheckList}>
+                    {operatingClassGroups.map((classGroup) => (
+                      <label key={classGroup.id} style={classCheckItem}>
+                        <input
+                          type="checkbox"
+                          name="classGroupIds"
+                          value={classGroup.id}
+                          defaultChecked={classGroup.id === defaultClassGroupId}
+                        />
+                        <span>{classGroup.teacherName ? `${classGroup.teacherName} / ${classGroup.name}` : classGroup.name}</span>
+                      </label>
                     ))}
-                  </select>
+                    {operatingClassGroups.length === 0 && <span style={emptyClassText}>운영중인 반이 없습니다.</span>}
+                  </div>
                 </label>
                 <label style={field}>
                   <span style={label}>학생 연락처</span>
@@ -139,6 +171,10 @@ export default function StudentCreateModal({ classGroups, defaultClassGroupId }:
   );
 }
 
+function isEndedClassGroup(classGroup: ClassGroupOption) {
+  return classGroup.effectiveStatus === "ENDED" || classGroup.status === "ENDED";
+}
+
 const triggerButton: CSSProperties = {
   height: 32,
   display: "inline-flex",
@@ -157,7 +193,7 @@ const triggerButton: CSSProperties = {
 const overlay: CSSProperties = {
   position: "fixed",
   inset: 0,
-  zIndex: 90,
+  zIndex: 1400,
   display: "grid",
   placeItems: "center",
   padding: 16,
@@ -183,6 +219,26 @@ const fieldGrid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat
 const field: CSSProperties = { display: "grid", gap: 5, minWidth: 0 };
 const label: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 13, fontWeight: 900 };
 const input: CSSProperties = { width: "100%", minHeight: 36, border: "1px solid transparent", borderRadius: 8, background: "var(--asc-bg-subtle)", color: "var(--asc-text)", padding: "7px 10px", fontSize: 14, fontWeight: 800, boxSizing: "border-box" };
+const classCheckList: CSSProperties = {
+  minHeight: 36,
+  maxHeight: 120,
+  overflow: "auto",
+  display: "grid",
+  gap: 4,
+  padding: 6,
+  borderRadius: 8,
+  background: "var(--asc-bg-subtle)",
+};
+const classCheckItem: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 7,
+  minWidth: 0,
+  fontSize: 13,
+  fontWeight: 850,
+  color: "var(--asc-text)",
+};
+const emptyClassText: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 12, fontWeight: 800 };
 const textarea: CSSProperties = { minHeight: 76, resize: "vertical" };
 const messageText: CSSProperties = { margin: 0, color: "var(--asc-text-muted)", fontSize: 13, fontWeight: 800 };
 const actions: CSSProperties = { display: "flex", justifyContent: "flex-end", gap: 8 };

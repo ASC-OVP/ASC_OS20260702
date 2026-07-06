@@ -140,6 +140,9 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
   const teachers = staff.filter((member) => member.role === "TEACHER" || member.role === "MANAGER" || member.role === "ADMIN");
   const assistants = staff.filter((member) => member.role === "ASSISTANT");
   const primaryClass = student.studentClasses[0]?.classGroup;
+  const selectedClassGroupIds = new Set(
+    student.studentClasses.filter((membership) => membership.status === "ACTIVE").map((membership) => membership.classGroupId)
+  );
   const filteredMemos = memoQ
     ? student.memos.filter((memo) =>
         [memo.content, memo.writer.name, memoTypeText(memo.type)].join(" ").toLocaleLowerCase("ko-KR").includes(memoQ.toLocaleLowerCase("ko-KR"))
@@ -201,14 +204,16 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                   <Field label="학교"><input name="schoolName" defaultValue={student.schoolName ?? ""} style={miniInput} /></Field>
                   <Field label="학년"><input name="grade" defaultValue={student.grade ?? ""} style={miniInput} /></Field>
                   <Field label="소속 반">
-                    <select name="classGroupId" defaultValue={primaryClass?.id ?? ""} style={miniInput}>
-                      <option value="">미지정</option>
+                    <input type="hidden" name="classGroupIds" value="" />
+                    <div style={classCheckList}>
                       {classGroups.map((classGroup) => (
-                        <option key={classGroup.id} value={classGroup.id}>
-                          {classGroup.teacher?.name ? `${classGroup.teacher.name} / ${classGroup.name}` : classGroup.name}
-                        </option>
+                        <label key={classGroup.id} style={classCheckItem}>
+                          <input type="checkbox" name="classGroupIds" value={classGroup.id} defaultChecked={selectedClassGroupIds.has(classGroup.id)} />
+                          <span>{classGroup.teacher?.name ? `${classGroup.teacher.name} / ${classGroup.name}` : classGroup.name}</span>
+                        </label>
                       ))}
-                    </select>
+                      {classGroups.length === 0 && <span style={emptyClassText}>선택 가능한 반이 없습니다.</span>}
+                    </div>
                   </Field>
                   <Field label="담당 강사">
                     <select name="teacherId" defaultValue={student.teacherId ?? ""} style={miniInput}>
@@ -850,6 +855,9 @@ const successBadge: CSSProperties = { ...softBadge, background: "var(--asc-succe
 const infoGrid: CSSProperties = { display: "grid", gap: 2 };
 const fieldRow: CSSProperties = { display: "grid", gridTemplateColumns: "112px 1fr", alignItems: "center", gap: 8, minHeight: 38, borderBottom: "1px solid var(--asc-row-divider)", color: "var(--asc-text-muted)", fontSize: 13, fontWeight: 900 };
 const miniInput: CSSProperties = { width: "100%", height: 34, border: "1px solid var(--asc-border-subtle)", borderRadius: "var(--asc-radius-md)", background: "var(--asc-surface)", color: "var(--asc-text)", padding: "0 9px", fontWeight: 850 };
+const classCheckList: CSSProperties = { maxHeight: 132, overflowY: "auto", display: "grid", gap: 4, padding: "5px 0" };
+const classCheckItem: CSSProperties = { minHeight: 26, display: "grid", gridTemplateColumns: "18px minmax(0, 1fr)", alignItems: "center", gap: 6, color: "var(--asc-text)", fontSize: 12, fontWeight: 850 };
+const emptyClassText: CSSProperties = { color: "var(--asc-text-soft)", fontSize: 12, fontWeight: 850 };
 const twoInline: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 };
 const textarea: CSSProperties = { width: "100%", border: "1px solid var(--asc-border-subtle)", borderRadius: "var(--asc-radius-md)", padding: 10, resize: "vertical", background: "var(--asc-surface)", color: "var(--asc-text)", fontWeight: 850 };
 const memoLabel: CSSProperties = { display: "grid", gap: 6, color: "var(--asc-text-muted)", fontSize: 13, fontWeight: 900 };

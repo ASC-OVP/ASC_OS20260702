@@ -19,6 +19,7 @@ import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { recordActivity } from "@/lib/activityLog";
+import { todayKoreaDate } from "@/lib/date";
 import { formatPhoneNumber } from "@/lib/phone";
 
 const STUDENT_STATUSES = Object.values(StudentStatus) as StudentStatus[];
@@ -41,6 +42,7 @@ type StudentExcelUploadRow = {
   schoolName?: string;
   grade?: string;
   classGroupId?: string;
+  classGroupIds?: string[];
   subject?: string;
   currentLevel?: string;
   status?: string;
@@ -89,6 +91,28 @@ function cleanIds(values: FormDataEntryValue[]) {
         .filter((value): value is string => Boolean(value))
     )
   );
+}
+
+function cleanIdArray(values: unknown) {
+  const rawValues = Array.isArray(values)
+    ? values
+    : typeof values === "string"
+      ? values.split(",")
+      : [];
+  return Array.from(
+    new Set(
+      rawValues
+        .map((value) => cleanId(String(value ?? "").trim()))
+        .filter((value): value is string => Boolean(value))
+    )
+  );
+}
+
+function classGroupIdsFromFormData(formData: FormData) {
+  const selectedIds = cleanIds(formData.getAll("classGroupIds"));
+  const csvIds = cleanIdArray(text(formData, "classGroupIds"));
+  const legacyId = cleanId(nullableText(formData, "classGroupId"));
+  return selectedIds.length > 0 || csvIds.length > 0 || formData.has("classGroupIds") ? [...new Set([...selectedIds, ...csvIds])] : legacyId ? [legacyId] : [];
 }
 
 function classAssistantIds(formData: FormData) {
@@ -158,6 +182,64 @@ async function findClassGroupForAcademy(academyId: string, classGroupId: string 
   });
 }
 
+async function findClassGroupsForAcademy(academyId: string, classGroupIds: string[]) {
+  if (classGroupIds.length === 0) return [];
+  return prisma.classGroup.findMany({
+    where: { id: { in: classGroupIds }, academyId },
+    select: { id: true, teacherId: true },
+  });
+}
+
+async function syncStudentClasses(
+  tx: Prisma.TransactionClient,
+  academyId: string,
+  studentId: string,
+  classGroupIds: string[]
+) {
+  const today = todayKoreaDate();
+  const uniqueClassGroupIds = Array.from(new Set(classGroupIds));
+
+  await tx.studentClass.updateMany({
+    where: {
+      academyId,
+      studentId,
+      status: "ACTIVE",
+      ...(uniqueClassGroupIds.length > 0 ? { classGroupId: { notIn: uniqueClassGroupIds } } : {}),
+    },
+    data: {
+      status: "LEFT",
+      isPrimary: false,
+      leftAt: today,
+    },
+  });
+
+  if (uniqueClassGroupIds.length === 0) return;
+
+  await tx.studentClass.updateMany({
+    where: { academyId, studentId, classGroupId: { in: uniqueClassGroupIds } },
+    data: { status: "ACTIVE", leftAt: null, isPrimary: false },
+  });
+
+  for (const [index, classGroupId] of uniqueClassGroupIds.entries()) {
+    await tx.studentClass.upsert({
+      where: { studentId_classGroupId: { studentId, classGroupId } },
+      update: {
+        status: "ACTIVE",
+        leftAt: null,
+        isPrimary: index === 0,
+      },
+      create: {
+        academyId,
+        studentId,
+        classGroupId,
+        isPrimary: index === 0,
+        status: "ACTIVE",
+        joinedAt: today,
+      },
+    });
+  }
+}
+
 async function validateAssistantIds(academyId: string, assistantIds: string[]) {
   if (assistantIds.length === 0) return;
 
@@ -206,13 +288,17 @@ export async function createStudent(formData: FormData) {
   const memo = nullableText(formData, "memo");
   const teacherId = cleanId(nullableText(formData, "teacherId"));
   const assistantId = cleanId(nullableText(formData, "assistantId"));
-  const classGroupId = cleanId(nullableText(formData, "classGroupId"));
+  const classGroupIds = classGroupIdsFromFormData(formData);
 
   if (!name) {
     throw new Error("학생 이름은 필수입니다.");
   }
 
-  const classGroup = await findClassGroupForAcademy(user.academyId, classGroupId);
+  const classGroups = await findClassGroupsForAcademy(user.academyId, classGroupIds);
+  if (classGroups.length !== classGroupIds.length) {
+    throw new Error("소속 반 정보를 확인할 수 없습니다.");
+  }
+  const primaryClassGroup = classGroupIds.length > 0 ? classGroups.find((classGroup) => classGroup.id === classGroupIds[0]) ?? null : null;
 
   let createdStudentId = "";
   let createdStudentName = "";
@@ -230,23 +316,14 @@ export async function createStudent(formData: FormData) {
         currentLevel,
         status,
         memo,
-        teacherId: teacherId ?? classGroup?.teacherId ?? null,
+        teacherId: teacherId ?? primaryClassGroup?.teacherId ?? null,
         assistantId,
       },
     });
     createdStudentId = student.id;
     createdStudentName = student.name;
 
-    if (classGroup) {
-      await tx.studentClass.create({
-        data: {
-          academyId: user.academyId,
-          studentId: student.id,
-          classGroupId: classGroup.id,
-          isPrimary: true,
-        },
-      });
-    }
+    await syncStudentClasses(tx, user.academyId, student.id, classGroupIds);
   });
 
   if (createdStudentId) {
@@ -260,7 +337,7 @@ export async function createStudent(formData: FormData) {
   }
 
   revalidatePath("/students");
-  redirect(classGroup ? `/students?classGroupId=${encodeURIComponent(classGroup.id)}` : "/students?classGroupId=all");
+  redirect(primaryClassGroup ? `/students?classGroupId=${encodeURIComponent(primaryClassGroup.id)}` : "/students?classGroupId=all");
 }
 
 export async function updateStudent(formData: FormData) {
@@ -278,8 +355,8 @@ export async function updateStudent(formData: FormData) {
   const memo = nullableText(formData, "memo");
   const teacherId = cleanId(nullableText(formData, "teacherId"));
   const assistantId = cleanId(nullableText(formData, "assistantId"));
-  const classGroupId = cleanId(nullableText(formData, "classGroupId"));
-  const shouldUpdateClassGroup = formData.has("classGroupId");
+  const classGroupIds = classGroupIdsFromFormData(formData);
+  const shouldUpdateClassGroup = formData.has("classGroupId") || formData.has("classGroupIds");
 
   if (!id) {
     throw new Error("수정할 학생이 없습니다.");
@@ -298,7 +375,11 @@ export async function updateStudent(formData: FormData) {
     throw new Error("학생을 찾을 수 없습니다.");
   }
 
-  const classGroup = await findClassGroupForAcademy(user.academyId, classGroupId);
+  const classGroups = await findClassGroupsForAcademy(user.academyId, classGroupIds);
+  if (classGroups.length !== classGroupIds.length) {
+    throw new Error("소속 반 정보를 확인할 수 없습니다.");
+  }
+  const primaryClassGroup = classGroupIds.length > 0 ? classGroups.find((classGroup) => classGroup.id === classGroupIds[0]) ?? null : null;
 
   await prisma.$transaction(async (tx) => {
     await tx.student.update({
@@ -313,26 +394,13 @@ export async function updateStudent(formData: FormData) {
         currentLevel,
         status,
         memo,
-        teacherId: teacherId ?? classGroup?.teacherId ?? null,
+        teacherId: teacherId ?? primaryClassGroup?.teacherId ?? null,
         assistantId,
       },
     });
 
     if (shouldUpdateClassGroup) {
-      await tx.studentClass.deleteMany({
-        where: { academyId: user.academyId, studentId: id },
-      });
-
-      if (classGroup) {
-        await tx.studentClass.create({
-          data: {
-            academyId: user.academyId,
-            studentId: id,
-            classGroupId: classGroup.id,
-            isPrimary: true,
-          },
-        });
-      }
+      await syncStudentClasses(tx, user.academyId, id, classGroupIds);
     }
   });
 
@@ -397,13 +465,17 @@ export async function createStudentFromSheet(formData: FormData) {
   const memo = nullableText(formData, "memo");
   const teacherId = cleanId(nullableText(formData, "teacherId"));
   const assistantId = cleanId(nullableText(formData, "assistantId"));
-  const classGroupId = cleanId(nullableText(formData, "classGroupId"));
+  const classGroupIds = classGroupIdsFromFormData(formData);
 
   if (!name) {
     throw new Error("학생 이름은 필수입니다.");
   }
 
-  const classGroup = await findClassGroupForAcademy(user.academyId, classGroupId);
+  const classGroups = await findClassGroupsForAcademy(user.academyId, classGroupIds);
+  if (classGroups.length !== classGroupIds.length) {
+    throw new Error("소속 반 정보를 확인할 수 없습니다.");
+  }
+  const primaryClassGroup = classGroupIds.length > 0 ? classGroups.find((classGroup) => classGroup.id === classGroupIds[0]) ?? null : null;
 
   let createdStudentId = "";
   let createdStudentName = "";
@@ -420,23 +492,14 @@ export async function createStudentFromSheet(formData: FormData) {
         subject,
         currentLevel,
         memo,
-        teacherId: teacherId ?? classGroup?.teacherId ?? null,
+        teacherId: teacherId ?? primaryClassGroup?.teacherId ?? null,
         assistantId,
       },
     });
     createdStudentId = student.id;
     createdStudentName = student.name;
 
-    if (classGroup) {
-      await tx.studentClass.create({
-        data: {
-          academyId: user.academyId,
-          studentId: student.id,
-          classGroupId: classGroup.id,
-          isPrimary: true,
-        },
-      });
-    }
+    await syncStudentClasses(tx, user.academyId, student.id, classGroupIds);
   });
 
   if (createdStudentId) {
@@ -478,6 +541,7 @@ export async function createStudentsFromExcelUpload(formData: FormData) {
       schoolName: String(row?.schoolName ?? "").trim().slice(0, 80),
       grade: String(row?.grade ?? "").trim().slice(0, 40),
       classGroupId: cleanId(String(row?.classGroupId ?? "").trim()),
+      classGroupIds: cleanIdArray(row?.classGroupIds).length > 0 ? cleanIdArray(row?.classGroupIds) : cleanIdArray(row?.classGroupId),
       subject: String(row?.subject ?? "").trim().slice(0, 80),
       currentLevel: String(row?.currentLevel ?? "").trim().slice(0, 80),
       status: String(row?.status ?? "").trim().slice(0, 40),
@@ -498,7 +562,7 @@ export async function createStudentsFromExcelUpload(formData: FormData) {
     throw new Error(`학생명이 비어 있는 행 ${missingNameCount}개가 있습니다.`);
   }
 
-  const classGroupIds = Array.from(new Set(rows.map((row) => row.classGroupId).filter((id): id is string => Boolean(id))));
+  const classGroupIds = Array.from(new Set(rows.flatMap((row) => row.classGroupIds)));
   const classGroups = classGroupIds.length
     ? await prisma.classGroup.findMany({
         where: { id: { in: classGroupIds }, academyId: user.academyId },
@@ -514,7 +578,8 @@ export async function createStudentsFromExcelUpload(formData: FormData) {
   let createdCount = 0;
   await prisma.$transaction(async (tx) => {
     for (const row of rows) {
-      const classGroup = row.classGroupId ? classGroupMap.get(row.classGroupId) ?? null : null;
+      const rowClassGroups = row.classGroupIds.map((id) => classGroupMap.get(id)).filter((classGroup): classGroup is NonNullable<typeof classGroup> => Boolean(classGroup));
+      const primaryClassGroup = rowClassGroups[0] ?? null;
       const student = await tx.student.create({
         data: {
           academyId: user.academyId,
@@ -527,22 +592,13 @@ export async function createStudentsFromExcelUpload(formData: FormData) {
           currentLevel: row.currentLevel || null,
           status: uploadStudentStatus(row.status),
           memo: row.memo || null,
-          teacherId: classGroup?.teacherId ?? null,
+          teacherId: primaryClassGroup?.teacherId ?? null,
           assistantId: null,
         },
       });
       createdCount += 1;
 
-      if (classGroup) {
-        await tx.studentClass.create({
-          data: {
-            academyId: user.academyId,
-            studentId: student.id,
-            classGroupId: classGroup.id,
-            isPrimary: true,
-          },
-        });
-      }
+      await syncStudentClasses(tx, user.academyId, student.id, row.classGroupIds);
     }
   });
 
@@ -1162,7 +1218,7 @@ export async function updateStudentClassGroup(formData: FormData) {
   const user = await requireUser();
 
   const studentId = text(formData, "studentId");
-  const classGroupId = cleanId(nullableText(formData, "classGroupId"));
+  const classGroupIds = classGroupIdsFromFormData(formData);
 
   if (!studentId) {
     throw new Error("반을 수정할 학생을 확인해 주세요.");
@@ -1177,33 +1233,18 @@ export async function updateStudentClassGroup(formData: FormData) {
     throw new Error("학생을 찾을 수 없습니다.");
   }
 
-  const classGroup = await findClassGroupForAcademy(user.academyId, classGroupId);
+  const classGroups = await findClassGroupsForAcademy(user.academyId, classGroupIds);
+  if (classGroups.length !== classGroupIds.length) {
+    throw new Error("소속 반 정보를 확인할 수 없습니다.");
+  }
+  const primaryClassGroup = classGroupIds.length > 0 ? classGroups.find((classGroup) => classGroup.id === classGroupIds[0]) ?? null : null;
 
   await prisma.$transaction(async (tx) => {
-    await tx.studentClass.deleteMany({
-      where: { academyId: user.academyId, studentId },
+    await syncStudentClasses(tx, user.academyId, studentId, classGroupIds);
+    await tx.student.update({
+      where: { id: studentId },
+      data: { teacherId: primaryClassGroup?.teacherId ?? null },
     });
-
-    if (classGroup) {
-      await tx.studentClass.create({
-        data: {
-          academyId: user.academyId,
-          studentId,
-          classGroupId: classGroup.id,
-          isPrimary: true,
-        },
-      });
-
-      await tx.student.update({
-        where: { id: studentId },
-        data: { teacherId: classGroup.teacherId },
-      });
-    } else {
-      await tx.student.update({
-        where: { id: studentId },
-        data: { teacherId: null },
-      });
-    }
   });
 
   await recordActivity({
@@ -1212,7 +1253,7 @@ export async function updateStudentClassGroup(formData: FormData) {
     entityType: "Student",
     entityId: studentId,
     summary: `학생 반 변경`,
-    metadata: { studentId, classGroupId: classGroup?.id ?? null },
+    metadata: { studentId, classGroupIds },
   });
 
   revalidatePath("/students");

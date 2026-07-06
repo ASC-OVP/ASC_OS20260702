@@ -104,10 +104,10 @@ function legendDotTone(tone: CalendarEventCategoryTone): CSSProperties {
   if (tone === "red") return { background: "var(--asc-danger)" };
   if (tone === "orange") return { background: "var(--asc-warning)" };
   if (tone === "green") return { background: "var(--asc-success)" };
-  if (tone === "purple") return { background: "var(--asc-primary-hover)" };
+  if (tone === "purple") return { background: "var(--asc-accent-hover)" };
   if (tone === "amber") return { background: "var(--asc-warning)" };
   if (tone === "teal") return { background: "var(--asc-info)" };
-  return { background: "var(--asc-primary)" };
+  return { background: "var(--asc-accent)" };
 }
 
 const shell: CSSProperties = {
@@ -123,16 +123,16 @@ const shell: CSSProperties = {
   boxShadow: "var(--asc-shadow-sm)",
 };
 const filterRow: CSSProperties = { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" };
-const contentButtons: CSSProperties = { display: "inline-flex", gap: 4, padding: 2, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)" };
+const contentButtons: CSSProperties = { display: "inline-flex", gap: 4, padding: 2, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-toggle-bg)" };
 const filterButton: CSSProperties = { border: 0, borderRadius: "var(--asc-radius-sm)", background: "transparent", color: "var(--asc-text-muted)", padding: "6px 9px", fontSize: 12, fontWeight: 850, cursor: "pointer" };
-const filterButtonActive: CSSProperties = { background: "var(--asc-surface)", color: "var(--asc-text)", boxShadow: "var(--asc-shadow-sm)" };
+const filterButtonActive: CSSProperties = { background: "var(--asc-toggle-active-bg)", color: "var(--asc-toggle-active-text)" };
 const staffSelectLabel: CSSProperties = { display: "inline-flex", alignItems: "center", gap: 6, color: "var(--asc-text-muted)", fontSize: 12, fontWeight: 950 };
 const staffSelect: CSSProperties = { height: 34, minWidth: 150, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", color: "var(--asc-text)", padding: "0 8px", fontSize: 12, fontWeight: 850 };
 const viewRow: CSSProperties = { display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" };
-const viewTabs: CSSProperties = { display: "inline-flex", gap: 3, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", padding: 2, background: "var(--asc-bg-subtle)" };
+const viewTabs: CSSProperties = { display: "inline-flex", gap: 3, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", padding: 2, background: "var(--asc-toggle-bg)" };
 const layoutTabs: CSSProperties = { ...viewTabs };
 const viewButton: CSSProperties = { border: 0, borderRadius: "var(--asc-radius-sm)", background: "transparent", padding: "6px 10px", fontSize: 12, fontWeight: 950, cursor: "pointer", color: "var(--asc-text-muted)" };
-const viewButtonActive: CSSProperties = { background: "var(--asc-text)", color: "var(--asc-bg)" };
+const viewButtonActive: CSSProperties = { background: "var(--asc-toggle-active-bg)", color: "var(--asc-toggle-active-text)" };
 const legend: CSSProperties = { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", color: "var(--asc-text-muted)", fontSize: 11, fontWeight: 850 };
 const legendItem: CSSProperties = { display: "inline-flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" };
 const legendDot: CSSProperties = { width: 7, height: 7, borderRadius: "var(--asc-radius-sm)", display: "inline-block" };

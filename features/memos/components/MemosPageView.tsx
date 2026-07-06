@@ -7,6 +7,7 @@ import PersonalStickyBoard, { type StickyMemoView } from "@/features/memos/compo
 import { canManageAnnouncements, requireUser } from "@/lib/auth";
 import { MemoType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { surfaceBorder } from "@/lib/styles";
 
 type Props = {
   searchParams?: Promise<{
@@ -507,7 +508,7 @@ const page: CSSProperties = { padding: 10, color: "var(--asc-text)", background:
 const container: CSSProperties = { width: "100%", maxWidth: "none", margin: 0, display: "grid", gap: 10 };
 const header: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, background: "transparent", border: 0, borderRadius: 0, padding: "0 2px 2px", boxShadow: "none" };
 const memoGrid: CSSProperties = { display: "grid", gap: 10, alignItems: "start" };
-const legacyPanel: CSSProperties = { display: "grid", gap: 8, background: "var(--asc-surface)", border: "1px solid transparent", borderRadius: "var(--asc-radius-lg)", padding: 10, boxShadow: "var(--asc-shadow-sm)" };
+const legacyPanel: CSSProperties = { display: "grid", gap: 8, background: "var(--asc-surface)", border: surfaceBorder, borderRadius: "var(--asc-radius-lg)", padding: 10, boxShadow: "var(--asc-shadow-sm)" };
 const legacyHead: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" };
 const legacyTitle: CSSProperties = { margin: 0, fontSize: 18, fontWeight: 950 };
 const legacyDesc: CSSProperties = { margin: "5px 0 0", color: "var(--asc-text-muted)", fontSize: 13 };

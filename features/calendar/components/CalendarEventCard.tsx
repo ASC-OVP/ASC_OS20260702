@@ -36,20 +36,20 @@ function toneStyle(tone: CalendarEventCategoryTone): CSSProperties {
   if (tone === "red") return { borderColor: "transparent", background: "var(--asc-danger-soft)" };
   if (tone === "orange") return { borderColor: "transparent", background: "var(--asc-warning-soft)" };
   if (tone === "green") return { borderColor: "transparent", background: "var(--asc-success-soft)" };
-  if (tone === "purple") return { borderColor: "transparent", background: "var(--asc-primary-soft)" };
+  if (tone === "purple") return { borderColor: "transparent", background: "var(--asc-accent-soft)" };
   if (tone === "amber") return { borderColor: "transparent", background: "var(--asc-warning-soft)" };
   if (tone === "teal") return { borderColor: "transparent", background: "var(--asc-info-soft)" };
-  return { borderColor: "transparent", background: "var(--asc-primary-soft)" };
+  return { borderColor: "transparent", background: "var(--asc-accent-soft)" };
 }
 
 function chipTone(tone: CalendarEventCategoryTone): CSSProperties {
   if (tone === "red") return { color: "var(--asc-danger)", background: "var(--asc-surface)" };
   if (tone === "orange") return { color: "var(--asc-warning-text)", background: "var(--asc-surface)" };
   if (tone === "green") return { color: "var(--asc-success)", background: "var(--asc-surface)" };
-  if (tone === "purple") return { color: "var(--asc-primary)", background: "var(--asc-surface)" };
+  if (tone === "purple") return { color: "var(--asc-accent)", background: "var(--asc-surface)" };
   if (tone === "amber") return { color: "var(--asc-warning-text)", background: "var(--asc-surface)" };
   if (tone === "teal") return { color: "var(--asc-info)", background: "var(--asc-surface)" };
-  return { color: "var(--asc-primary)", background: "var(--asc-surface)" };
+  return { color: "var(--asc-accent)", background: "var(--asc-surface)" };
 }
 
 const card: CSSProperties = {

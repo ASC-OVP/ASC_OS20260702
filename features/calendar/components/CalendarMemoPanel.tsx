@@ -125,7 +125,7 @@ function ManagementSection({ date, event }: { date?: string; event?: Materialize
       <h3 style={sectionTitle}>운영일정 관리</h3>
       <div style={managementLinks}>
         <Link href={date ? `/tasks/new?date=${date}` : "/tasks/new"} style={manageLink}>업무 추가</Link>
-        <Link href="/classes/new" style={manageLink}>반 수업 추가</Link>
+        <Link href="/classes?create=1" style={manageLink}>반 수업 추가</Link>
         <Link href={workHref} style={manageLink}>출근 일정 관리</Link>
         <Link href="/tasks" style={manageLink}>업무 목록 관리</Link>
         <Link href="/classes" style={manageLink}>반 일정 관리</Link>
@@ -150,10 +150,10 @@ function sourceBadge(tone: ReturnType<typeof eventTone>): CSSProperties {
   if (tone === "red") return { background: "var(--asc-danger-soft)", color: "var(--asc-danger)" };
   if (tone === "orange") return { background: "var(--asc-warning-soft)", color: "var(--asc-warning-text)" };
   if (tone === "green") return { background: "var(--asc-success-soft)", color: "var(--asc-success)" };
-  if (tone === "purple") return { background: "var(--asc-primary-soft)", color: "var(--asc-primary)" };
+  if (tone === "purple") return { background: "var(--asc-accent-soft)", color: "var(--asc-accent)" };
   if (tone === "cyan") return { background: "var(--asc-info-soft)", color: "var(--asc-info)" };
   if (tone === "gray") return { background: "var(--asc-bg-subtle)", color: "var(--asc-text-muted)" };
-  return { background: "var(--asc-primary-soft)", color: "var(--asc-primary)" };
+  return { background: "var(--asc-accent-soft)", color: "var(--asc-accent)" };
 }
 
 function severityBadge(severity: MaterializedCalendarEvent["severity"]): CSSProperties {

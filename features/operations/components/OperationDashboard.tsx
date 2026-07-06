@@ -7,6 +7,7 @@ import { effectiveClassStatus } from "@/lib/classGroups";
 import { todayKoreaDate } from "@/lib/date";
 import { prisma } from "@/lib/prisma";
 import { canExportFullAcademy } from "@/lib/scopes";
+import { surfaceBorder } from "@/lib/styles";
 
 export const dynamic = "force-dynamic";
 
@@ -205,13 +206,13 @@ function formatDateTime(value: string | Date) {
 
 const page: CSSProperties = { padding: 12, color: "var(--asc-text)", background: "var(--asc-bg-subtle)", minHeight: "100vh" };
 const container: CSSProperties = { width: "100%", maxWidth: "none", margin: 0, display: "flex", flexDirection: "column", gap: 10 };
-const hero: CSSProperties = { display: "flex", justifyContent: "space-between", gap: 10, alignItems: "stretch", background: "var(--asc-surface)", border: "1px solid transparent", borderRadius: "var(--asc-radius-lg)", padding: "10px 12px", boxShadow: "var(--asc-shadow-sm)" };
+const hero: CSSProperties = { display: "flex", justifyContent: "space-between", gap: 10, alignItems: "stretch", background: "var(--asc-surface)", border: surfaceBorder, borderRadius: "var(--asc-radius-lg)", padding: "10px 12px", boxShadow: "var(--asc-shadow-sm)" };
 const statsGrid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(5, minmax(132px, 1fr))", gap: 8 };
-const statCard: CSSProperties = { background: "var(--asc-surface)", border: "1px solid transparent", borderRadius: "var(--asc-radius-lg)", padding: 10, display: "flex", flexDirection: "column", gap: 4, boxShadow: "var(--asc-shadow-sm)" };
+const statCard: CSSProperties = { background: "var(--asc-surface)", border: surfaceBorder, borderRadius: "var(--asc-radius-lg)", padding: 10, display: "flex", flexDirection: "column", gap: 4, boxShadow: "var(--asc-shadow-sm)" };
 const warnCard: CSSProperties = { background: "var(--asc-warning-soft)" };
 const dangerCard: CSSProperties = { background: "var(--asc-danger-soft)" };
 const grid: CSSProperties = { display: "grid", gridTemplateColumns: "1.1fr .9fr", gap: 10 };
-const panel: CSSProperties = { background: "var(--asc-surface)", border: "1px solid transparent", borderRadius: "var(--asc-radius-lg)", padding: 12, boxShadow: "var(--asc-shadow-sm)" };
+const panel: CSSProperties = { background: "var(--asc-surface)", border: surfaceBorder, borderRadius: "var(--asc-radius-lg)", padding: 12, boxShadow: "var(--asc-shadow-sm)" };
 const panelHead: CSSProperties = { display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 8 };
 const panelTitle: CSSProperties = { margin: 0, fontSize: 16, fontWeight: 950 };
 const panelDesc: CSSProperties = { margin: "3px 0 0", color: "var(--asc-text-muted)", fontSize: 13 };

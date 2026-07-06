@@ -35,6 +35,7 @@ export type StudentSheetRow = {
   schoolName: string;
   grade: string;
   classGroupId: string;
+  classGroupIds?: string[];
   classGroupName: string;
   subject: string;
   currentLevel: string;
@@ -1824,8 +1825,8 @@ function editCellStyle(isSelected: boolean, status?: string, isRowSelected = fal
     ...statusFill,
     ...(isRowSelected && !status ? selectedFill : {}),
     padding: 0,
-    outline: isSelected ? "2px solid #0b50d0" : "none",
-    outlineOffset: -2,
+    outline: isSelected ? "1px solid rgba(11, 80, 208, 0.42)" : "none",
+    outlineOffset: -1,
   };
 }
 
@@ -1883,7 +1884,7 @@ const checkAllLabel: CSSProperties = { display: "inline-flex", alignItems: "cent
 const bulkSelect: CSSProperties = { height: 30, border: "1px solid #d1d5db", borderRadius: 4, padding: "0 6px", background: "#fff", fontSize: 12 };
 const bulkWideSelect: CSSProperties = { ...bulkSelect, width: 150 };
 const bulkButton: CSSProperties = { height: 30, border: "1px solid #111827", borderRadius: 4, background: "#111827", color: "#fff", padding: "0 9px", fontWeight: 900, fontSize: 12 };
-const settingsButton: CSSProperties = { height: 30, border: "1px solid #d1d5db", borderRadius: 4, background: "#fff", color: "#111827", padding: "0 9px", fontWeight: 900, fontSize: 12 };
+const settingsButton: CSSProperties = { height: 30, borderWidth: 1, borderStyle: "solid", borderColor: "#d1d5db", borderRadius: 4, background: "#fff", color: "#111827", padding: "0 9px", fontWeight: 900, fontSize: 12 };
 const primaryToolbarButton: CSSProperties = { ...settingsButton, borderColor: "#111827", background: "#111827", color: "#fff" };
 const dangerToolbarButton: CSSProperties = { height: 30, border: "1px solid #fecaca", borderRadius: 4, background: "#fff", color: "#991b1b", padding: "0 9px", fontWeight: 900, fontSize: 12 };
 const fullscreenButton: CSSProperties = { ...settingsButton, marginLeft: "auto", borderColor: "#111827" };
@@ -2049,7 +2050,7 @@ const toolSummary: CSSProperties = { cursor: "pointer", fontWeight: 950, color: 
 const settingsSection: CSSProperties = { display: "grid", gap: 8 };
 const settingsTitleRow: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 };
 const columnToggle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 900 };
-const smallGhostButton: CSSProperties = { height: 32, border: "1px solid #d1d5db", borderRadius: 6, background: "#fff", color: "#111827", padding: "0 10px", fontWeight: 900 };
+const smallGhostButton: CSSProperties = { height: 32, borderWidth: 1, borderStyle: "solid", borderColor: "#d1d5db", borderRadius: 6, background: "#fff", color: "#111827", padding: "0 10px", fontWeight: 900 };
 const smallSaveButton: CSSProperties = { ...smallGhostButton, borderColor: "#111827", background: "#111827", color: "#fff" };
 const optionActions: CSSProperties = { display: "flex", gap: 6 };
 const optionGrid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 8 };
@@ -2060,7 +2061,7 @@ const customColumnInput: CSSProperties = { ...optionLabelInput, width: 170, heig
 const customColumnList: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(270px, 1fr))", gap: 8 };
 const customColumnItem: CSSProperties = { display: "grid", gridTemplateColumns: "58px 1fr 54px", alignItems: "center", gap: 8, border: "1px solid #e5e7eb", borderRadius: 6, padding: 8 };
 const emptyInline: CSSProperties = { color: "#6b7280", fontSize: 12, fontWeight: 850 };
-const sheetWrap: CSSProperties = { overflow: "auto", border: "1px solid #9ca3af", borderRadius: 4, maxHeight: "calc(100vh - 170px)", minHeight: 500 };
+const sheetWrap: CSSProperties = { overflow: "auto", border: "1px solid #d5dde8", borderRadius: 4, maxHeight: "calc(100vh - 170px)", minHeight: 500 };
 const fullscreenSheetWrap: CSSProperties = { ...sheetWrap, flex: 1, maxHeight: "none", minHeight: 0, height: "100%" };
 const sheetTable: CSSProperties = { width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 12 };
 const sheetTh: CSSProperties = {
@@ -2068,15 +2069,15 @@ const sheetTh: CSSProperties = {
   top: 0,
   zIndex: 2,
   background: "#f3f4f6",
-  borderRight: "1px solid #c7ccd1",
-  borderBottom: "1px solid #9ca3af",
+  borderRight: "1px solid #dbe3ee",
+  borderBottom: "1px solid #cfd9e6",
   padding: "5px 6px",
   textAlign: "center",
   fontWeight: 950,
   whiteSpace: "nowrap",
   overflow: "visible",
 };
-const draggingTh: CSSProperties = { background: "#e0ecff", outline: "2px solid #7aa2ff", outlineOffset: -2 };
+const draggingTh: CSSProperties = { background: "#f0f6ff", outline: "1px solid rgba(11, 80, 208, 0.34)", outlineOffset: -1 };
 const headerInner: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 22px", alignItems: "center", gap: 2 };
 const headerSortButton: CSSProperties = {
   minWidth: 0,
@@ -2130,16 +2131,16 @@ const columnMenuItem: CSSProperties = {
   cursor: "pointer",
 };
 const sheetTd: CSSProperties = {
-  borderRight: "1px solid #d1d5db",
-  borderBottom: "1px solid #d1d5db",
+  borderRight: "1px solid #e1e7ef",
+  borderBottom: "1px solid #e1e7ef",
   background: "#fff",
   height: 30,
   padding: "4px 6px",
   textAlign: "center",
   whiteSpace: "nowrap",
 };
-const selectedRow: CSSProperties = { background: "#e8f0fe" };
-const selectedFill: CSSProperties = { background: "#e8f0fe" };
+const selectedRow: CSSProperties = { background: "#f4f9ff" };
+const selectedFill: CSSProperties = { background: "#f4f9ff" };
 const rowActionTd: CSSProperties = { position: "relative", overflow: "visible" };
 const rowMenuButton: CSSProperties = {
   width: 28,
@@ -2218,4 +2219,3 @@ const cellInput: CSSProperties = {
 };
 const memoInput: CSSProperties = { ...cellInput, textAlign: "left" };
 const emptyTd: CSSProperties = { padding: 30, textAlign: "center", color: "#6b7280" };
-

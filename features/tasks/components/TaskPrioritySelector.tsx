@@ -67,7 +67,8 @@ const segmentedGrid: CSSProperties = {
 const segmentButton: CSSProperties = {
   minWidth: 0,
   height: 32,
-  border: "1px solid",
+  borderWidth: 1,
+  borderStyle: "solid",
   borderRadius: 8,
   padding: "0 7px",
   fontSize: 12,

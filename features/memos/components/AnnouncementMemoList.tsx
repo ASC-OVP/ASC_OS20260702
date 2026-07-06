@@ -198,7 +198,7 @@ function formatDateTime(date: Date) {
 
 const panel: CSSProperties = { background: "var(--asc-surface)", border: "1px solid transparent", borderRadius: "var(--asc-radius-lg)", padding: 12, display: "grid", gap: 10, minWidth: 0, boxShadow: "var(--asc-shadow-sm)" };
 const head: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 };
-const eyebrow: CSSProperties = { margin: "0 0 4px", color: "var(--asc-primary)", fontWeight: 950, fontSize: 12 };
+const eyebrow: CSSProperties = { margin: "0 0 4px", color: "var(--asc-accent)", fontWeight: 950, fontSize: 12 };
 const title: CSSProperties = { margin: 0, fontSize: 18, fontWeight: 950 };
 const desc: CSSProperties = { margin: "3px 0 0", color: "var(--asc-text-muted)", fontSize: 12 };
 const headRight: CSSProperties = { display: "flex", alignItems: "flex-start", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" };

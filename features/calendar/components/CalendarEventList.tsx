@@ -159,8 +159,8 @@ const dayCell: CSSProperties = {
 };
 const dayCellLarge: CSSProperties = { minHeight: 430 };
 const mutedDayCell: CSSProperties = { background: "var(--asc-bg-subtle)", color: "var(--asc-text-muted)" };
-const todayCell: CSSProperties = { boxShadow: "inset 0 0 0 2px var(--asc-primary)" };
-const selectedCell: CSSProperties = { background: "var(--asc-primary-soft)" };
+const todayCell: CSSProperties = { boxShadow: "inset 0 0 0 2px var(--asc-accent)" };
+const selectedCell: CSSProperties = { background: "var(--asc-accent-soft)" };
 const dayHeaderButton: CSSProperties = { border: 0, background: "transparent", color: "inherit", padding: 0, display: "flex", justifyContent: "space-between", alignItems: "center", textAlign: "left", fontSize: 13, cursor: "pointer" };
 const dayHeaderMeta: CSSProperties = { display: "inline-flex", alignItems: "center", gap: 4 };
 const memoBadge: CSSProperties = { borderRadius: "var(--asc-radius-sm)", background: "var(--asc-warning-soft)", color: "var(--asc-warning-text)", padding: "2px 5px", fontSize: 10, fontWeight: 950 };

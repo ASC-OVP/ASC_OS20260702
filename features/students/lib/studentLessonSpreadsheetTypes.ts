@@ -14,6 +14,10 @@ export type StoredClassLesson = {
 export type LessonClassGroupOption = {
   id: string;
   name: string;
+  status?: "UPCOMING" | "ACTIVE" | "PAUSED" | "ENDED";
+  effectiveStatus?: "UPCOMING" | "ACTIVE" | "PAUSED" | "ENDED";
+  subject?: string | null;
+  grade?: string | null;
   teacherName?: string;
   startDate?: string | null;
   endDate?: string | null;
@@ -55,6 +59,7 @@ export type StudentLessonSpreadsheetProps = {
   rows: StudentSheetRow[];
   customColumns: SheetCustomColumn[];
   selectedClassGroupId?: string | null;
+  selectedClassGroupIds?: string[];
   classGroups: LessonClassGroupOption[];
   classTests?: ClassTestExamOption[];
   selectedTestExamId?: string | null;
@@ -103,7 +108,20 @@ export type DraftStudentRow = StudentSheetRow & {
 
 export type GridColumn =
   | { id: MetaColumnId; label: string; kind: "meta"; width: number }
-  | { id: string; label: string; kind: "custom"; width: number; customColumnId: string; afterColumnId?: string | null }
+  | {
+      id: string;
+      label: string;
+      kind: "custom";
+      width: number;
+      customColumnId: string;
+      afterColumnId?: string | null;
+      lessonId?: string;
+      lessonIndex?: number;
+      groupLabel?: string;
+      date?: string;
+      dateLabel?: string;
+      scheduleLabel?: string;
+    }
   | {
       id: string;
       label: string;
@@ -159,6 +177,7 @@ export type DirtyMetaValue = {
   studentId: string;
   field: EditableMetaColumnId;
   value: string;
+  values?: string[];
 };
 
 export type SheetHistorySnapshot = {

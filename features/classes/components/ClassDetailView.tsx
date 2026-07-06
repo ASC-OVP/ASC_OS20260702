@@ -6,7 +6,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { createClassMemoAction, deleteClassMemoAction } from "@/features/classes/actions/classActions";
 import ClassEditModal from "@/features/classes/components/ClassEditModal";
 import StudentScoreBarList from "@/features/classes/components/StudentScoreBarList";
-import { buildClassStats, latestStudentScore } from "@/lib/classGroupStats";
+import { buildClassStats, filterStudentActivityForClassSchedule, latestStudentScore } from "@/lib/classGroupStats";
 import {
   canManageClassGroup,
   canViewClassGroup,
@@ -59,7 +59,6 @@ export default async function ClassDetailPage({ params }: Props) {
           },
         },
         studentClasses: {
-          where: { status: "ACTIVE" },
           orderBy: { createdAt: "asc" },
           include: {
             student: {
@@ -105,9 +104,10 @@ export default async function ClassDetailPage({ params }: Props) {
   const teachers = staff.filter((member) => member.role === "ADMIN" || member.role === "MANAGER" || member.role === "TEACHER");
   const assistants = staff.filter((member) => member.role === "ASSISTANT");
   const canManage = canManageClassGroup(user, classGroup);
-  const students = classGroup.studentClasses.map((membership) => membership.student);
-  const stats = buildClassStats(students);
   const effectiveStatus = effectiveClassStatus(classGroup);
+  const classMemberships = classGroup.studentClasses.filter((membership) => effectiveStatus === "ENDED" || membership.status === "ACTIVE");
+  const students = classMemberships.map((membership) => filterStudentActivityForClassSchedule(membership.student, classGroup, membership));
+  const stats = buildClassStats(students);
   const operationStats = computeClassOperationStats(classGroup);
   const sortedStudentScores = [...stats.studentScores].sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
 

@@ -1,3 +1,5 @@
-import ClassForm from "@/features/classes/components/ClassForm";
+import { redirect } from "next/navigation";
 
-export default ClassForm;
+export default function NewClassPage() {
+  redirect("/classes?create=1");
+}

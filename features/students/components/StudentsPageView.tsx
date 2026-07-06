@@ -9,6 +9,7 @@ type Props = {
   searchParams?: Promise<{
     date?: string;
     classGroupId?: string;
+    classGroupIds?: string;
     testId?: string;
   }>;
 };
@@ -21,13 +22,14 @@ export default async function StudentsPage({ searchParams }: Props) {
     classGroupOptions,
     customColumns,
     effectiveClassGroupId,
+    effectiveClassGroupIds,
     rows,
     selectedTestExamId,
     testOptions,
     uploadStudents,
   } = await loadStudentsPageData(await searchParams);
   const selectedClassGroup = classGroupOptions.find((classGroup) => classGroup.id === effectiveClassGroupId);
-  const scopeLabel = effectiveClassGroupId ? selectedClassGroup?.name ?? "선택 반" : "전체 학생";
+  const scopeLabel = effectiveClassGroupIds.length > 1 ? `선택 ${effectiveClassGroupIds.length}개 반` : effectiveClassGroupId ? selectedClassGroup?.name ?? "선택 반" : "전체 학생";
   const headerStats = [
     { label: "범위", value: scopeLabel },
     { label: "학생", value: `${rows.length}명` },
@@ -66,6 +68,7 @@ export default async function StudentsPage({ searchParams }: Props) {
           rows={rows}
           customColumns={customColumns}
           selectedClassGroupId={effectiveClassGroupId}
+          selectedClassGroupIds={effectiveClassGroupIds}
           classGroups={classGroupOptions}
           classTests={testOptions}
           selectedTestExamId={selectedTestExamId}

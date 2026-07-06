@@ -39,12 +39,15 @@ export const desc: CSSProperties = {
   fontSize: 13,
 };
 
+export const surfaceBorder = "1px solid var(--asc-surface-border)";
+export const surfaceShadow = "var(--asc-shadow-sm)";
+
 export const card: CSSProperties = {
   background: "var(--asc-surface)",
-  border: "1px solid transparent",
+  border: surfaceBorder,
   borderRadius: "var(--asc-radius-lg)",
   padding: 12,
-  boxShadow: "var(--asc-shadow-sm)",
+  boxShadow: surfaceShadow,
 };
 
 export const button: CSSProperties = {
@@ -107,10 +110,10 @@ export const backLink: CSSProperties = {
 
 export const excelWrap: CSSProperties = {
   background: "var(--asc-surface)",
-  border: "1px solid transparent",
+  border: surfaceBorder,
   borderRadius: "var(--asc-radius-md)",
   overflow: "auto",
-  boxShadow: "var(--asc-shadow-sm)",
+  boxShadow: surfaceShadow,
 };
 
 export const table: CSSProperties = {

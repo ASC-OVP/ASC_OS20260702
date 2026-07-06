@@ -12,7 +12,7 @@ type Props = {
 
 const defaultIconText = "강의";
 const defaultIconColor = "#1558d6";
-const classIconPalette = [{ label: "ASC 파랑", value: defaultIconColor }, ...sheetFillPalette];
+const classIconPalette = [{ label: "ASC 블루", value: defaultIconColor }, ...sheetFillPalette];
 
 export function classIconText(value?: string | null) {
   const text = (value ?? "").trim().slice(0, 3);

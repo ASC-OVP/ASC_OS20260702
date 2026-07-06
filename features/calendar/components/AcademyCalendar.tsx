@@ -215,7 +215,7 @@ const header: CSSProperties = {
 };
 const headerLayout: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "flex-start", gap: 14, minHeight: 46, flexWrap: "wrap" };
 const headerText: CSSProperties = { minWidth: 220, flex: "0 0 auto" };
-const eyebrow: CSSProperties = { margin: "0 0 4px", color: "var(--asc-primary)", fontSize: 12, fontWeight: 900 };
+const eyebrow: CSSProperties = { margin: "0 0 4px", color: "var(--asc-accent)", fontSize: 12, fontWeight: 900 };
 const pageTitle: CSSProperties = { margin: 0, color: "var(--asc-text)", fontSize: 20, lineHeight: 1.16, fontWeight: 950, letterSpacing: 0 };
 const pageDescription: CSSProperties = { margin: "2px 0 0", color: "var(--asc-text-muted)", fontSize: 13, lineHeight: 1.35 };
 const summaryStrip: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "flex-start", flexWrap: "wrap", gap: 0, flex: "1 1 520px", minWidth: 0 };
@@ -226,7 +226,7 @@ const leftColumn: CSSProperties = { minWidth: 0, display: "grid", gap: 10 };
 const calendarCard: CSSProperties = { minWidth: 0, minHeight: 0, border: "1px solid transparent", borderRadius: "var(--asc-radius-lg)", background: "var(--asc-surface)", padding: 10, overflow: "visible", boxShadow: "var(--asc-shadow-sm)" };
 const calendarControls: CSSProperties = { display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", alignItems: "center", gap: 8, marginBottom: 8 };
 const navGroup: CSSProperties = { display: "inline-flex", gap: 4 };
-const navButton: CSSProperties = { height: 30, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", color: "var(--asc-text)", padding: "0 10px", fontSize: 12, fontWeight: 950, cursor: "pointer" };
+const navButton: CSSProperties = { height: 30, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-primary-softer)", color: "var(--asc-primary-deep)", padding: "0 10px", fontSize: 12, fontWeight: 950, cursor: "pointer" };
 const calendarTitle: CSSProperties = { margin: 0, textAlign: "center", fontSize: 17, fontWeight: 950 };
 const eventCount: CSSProperties = { color: "var(--asc-text)", fontWeight: 950, fontSize: 12 };
 const sidePanel: CSSProperties = { position: "sticky", top: 10 };

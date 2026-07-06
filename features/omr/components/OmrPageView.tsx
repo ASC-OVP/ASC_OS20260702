@@ -13,6 +13,7 @@ import { ClassTestType, ExamResultStatus, OmrAnswerStatus, OmrTemplateType } fro
 import { getOmrTemplate, omrTemplateList, type OmrTemplateQuestion } from "@/features/omr/lib/omrTemplates";
 import { OMR_MAX_BATCH_LABEL, OMR_MAX_FILE_LABEL } from "@/features/omr/lib/omrUploadLimits";
 import { prisma } from "@/lib/prisma";
+import { surfaceBorder } from "@/lib/styles";
 import { createExamAction, deleteExamAction, saveAnswerKeyAction } from "@/features/omr/actions/examActions";
 import { deleteOmrUploadAction } from "@/features/omr/actions/uploadActions";
 import { applyOmrResultsToStudentScoresAction, gradeOmrAction, gradeSelectedOmrUploadsAction } from "@/features/omr/actions/gradingActions";
@@ -468,6 +469,7 @@ function NewOmrExamSheet({
   const availableTests = selectedClassGroup?.classTests ?? [];
   const lessonOptions = selectedClassGroup ? omrLessonsForClassGroup(selectedClassGroup) : [];
   const singleLesson = selectedClassGroup && selectedClassTest?.type === ClassTestType.SINGLE ? classLessonForClassTest(selectedClassTest, lessonOptions) : null;
+  const studentTestManagementHref = selectedClassGroup ? "/students?classGroupId=" + encodeURIComponent(selectedClassGroup.id) : "/students";
 
   return (
     <RightSheet title={"\uC0C8 OMR \uAC80\uC0AC"} closeHref="/omr">
@@ -512,9 +514,12 @@ function NewOmrExamSheet({
               <button style={secondaryButton}>{"\uC2DC\uD5D8 \uC801\uC6A9"}</button>
             </form>
           ) : (
-            <div style={sheetSubtleBox}>
-              <span>{"\uC774 \uBC18\uC5D0 \uB4F1\uB85D\uB41C \uC2DC\uD5D8\uC774 \uC5C6\uC2B5\uB2C8\uB2E4. \uD559\uC0DD\uD604\uD669\uD310\uC758 \uC2DC\uD5D8 \uAD00\uB9AC\uC5D0\uC11C \uBA3C\uC800 \uB4F1\uB85D\uD558\uC138\uC694."}</span>
-              <Link href={"/students?classGroupId=" + encodeURIComponent(selectedClassGroup.id)} style={smallButton}>{"\uC2DC\uD5D8 \uAD00\uB9AC\uB85C \uC774\uB3D9"}</Link>
+            <div style={testSetupCallout}>
+              <div style={testSetupCopy}>
+                <b>{"\uC774 \uBC18\uC5D0 \uB4F1\uB85D\uB41C \uC2DC\uD5D8\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."}</b>
+                <span>{"\uD559\uC0DD\uD604\uD669\uD310\uC73C\uB85C \uC774\uB3D9\uD574 \uC0C1\uB2E8 \uD14C\uC2A4\uD2B8 \uC548\uB0B4\uC758 \uC2DC\uD5D8 \uCD94\uAC00\uB97C \uB204\uB978 \uB4A4, \uC774 \uBC18\uC758 \uC2DC\uD5D8\uC744 \uBA3C\uC800 \uB4F1\uB85D\uD558\uC138\uC694."}</span>
+              </div>
+              <Link href={studentTestManagementHref} style={smallButton}>{"\uD559\uC0DD\uD604\uD669\uD310\uC5D0\uC11C \uC2DC\uD5D8 \uCD94\uAC00"}</Link>
             </div>
           )}
         </section>
@@ -558,8 +563,12 @@ function NewOmrExamSheet({
               <button style={smallButton} disabled={!canManageExam}>{"\uAC80\uC0AC \uC0DD\uC131"}</button>
             </form>
           ) : (
-            <div style={sheetSubtleBox}>
-              <span>{"\uB2E8\uC77C \uC2DC\uD5D8\uC5D0 \uC5F0\uACB0\uB41C \uCC28\uC2DC\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4. \uC2DC\uD5D8 \uAD00\uB9AC\uC5D0\uC11C \uC5F0\uACB0\uCC28\uC2DC\uB97C \uB2E4\uC2DC \uC120\uD0DD\uD558\uC138\uC694."}</span>
+            <div style={testSetupCallout}>
+              <div style={testSetupCopy}>
+                <b>{"\uB2E8\uC77C \uC2DC\uD5D8\uC758 \uC5F0\uACB0 \uCC28\uC2DC\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."}</b>
+                <span>{"\uD559\uC0DD\uD604\uD669\uD310\uC758 \uC2DC\uD5D8 \uAD00\uB9AC\uC5D0\uC11C \uD574\uB2F9 \uC2DC\uD5D8\uC758 \uC5F0\uACB0 \uCC28\uC2DC\uB97C \uB2E4\uC2DC \uC120\uD0DD\uD558\uC138\uC694."}</span>
+              </div>
+              <Link href={studentTestManagementHref} style={secondaryButton}>{"\uC5F0\uACB0 \uCC28\uC2DC \uC218\uC815\uD558\uAE30"}</Link>
             </div>
           )}
         </section>
@@ -1769,7 +1778,7 @@ function studentLabel(student: StudentOption | StudentBrief) {
 const page: CSSProperties = { minHeight: "100vh", background: "var(--asc-bg-subtle)", color: "var(--asc-text)" };
 const container: CSSProperties = { width: "100%", maxWidth: "none", margin: 0, padding: 12, display: "flex", flexDirection: "column", gap: 10 };
 const topBar: CSSProperties = { display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", background: "transparent", border: 0, borderRadius: 0, padding: "0 2px 2px", boxShadow: "none" };
-const workflowPanel: CSSProperties = { background: "var(--asc-surface)", border: "1px solid transparent", borderRadius: "var(--asc-radius-lg)", padding: 10, display: "grid", gap: 8, boxShadow: "var(--asc-shadow-sm)" };
+const workflowPanel: CSSProperties = { background: "var(--asc-surface)", border: surfaceBorder, borderRadius: "var(--asc-radius-lg)", padding: 10, display: "grid", gap: 8, boxShadow: "var(--asc-shadow-sm)" };
 const stepper: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(5, minmax(120px, 1fr))", gap: 6 };
 const stepItem: CSSProperties = { display: "flex", alignItems: "center", gap: 8, minHeight: 36, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", padding: "6px 8px", color: "var(--asc-text-muted)", fontSize: 12, fontWeight: 900 };
 const stepItemActive: CSSProperties = { background: "var(--asc-primary-soft)", color: "var(--asc-primary-hover)", boxShadow: "inset 3px 0 0 var(--asc-primary)" };
@@ -1779,7 +1788,7 @@ const stepNoActive: CSSProperties = { background: "var(--asc-primary)", color: "
 const stepNoComplete: CSSProperties = { background: "var(--asc-success)", color: "#fff" };
 const stepLabel: CSSProperties = { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
 const workflowEmptyState: CSSProperties = { border: "1px dashed var(--asc-border)", borderRadius: "var(--asc-radius-lg)", padding: 12, display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", background: "var(--asc-bg-subtle)" };
-const summaryCard: CSSProperties = { border: "1px solid transparent", borderRadius: "var(--asc-radius-lg)", background: "var(--asc-surface)", padding: 10, display: "grid", gridTemplateColumns: "minmax(220px, .8fr) minmax(420px, 1.2fr)", gap: 8, alignItems: "center", boxShadow: "var(--asc-shadow-sm)" };
+const summaryCard: CSSProperties = { border: surfaceBorder, borderRadius: "var(--asc-radius-lg)", background: "var(--asc-surface)", padding: 10, display: "grid", gridTemplateColumns: "minmax(220px, .8fr) minmax(420px, 1.2fr)", gap: 8, alignItems: "center", boxShadow: "var(--asc-shadow-sm)" };
 const summaryTitle: CSSProperties = { margin: "2px 0 5px", fontSize: 18, fontWeight: 950 };
 const summaryMetaGrid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(120px, 1fr))", gap: 6 };
 const summaryItem: CSSProperties = { border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", padding: "7px 8px", display: "grid", gap: 2, fontSize: 12 };
@@ -1800,14 +1809,14 @@ const wrongQuestionPill: CSSProperties = { border: "1px solid transparent", bord
 const remedialList: CSSProperties = { display: "flex", flexWrap: "wrap", gap: 5 };
 const remedialPill: CSSProperties = { border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-warning-soft)", color: "var(--asc-warning-text)", padding: "4px 7px", fontSize: 12, fontWeight: 900 };
 const eyebrow: CSSProperties = { margin: 0, color: "var(--asc-primary)", fontSize: 12, fontWeight: 950 };
-const filterBar: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 150px 150px 150px 150px 100px auto auto", gap: 6, background: "var(--asc-surface)", border: "1px solid transparent", borderRadius: "var(--asc-radius-lg)", padding: 8, boxShadow: "var(--asc-shadow-sm)" };
+const filterBar: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 150px 150px 150px 150px 100px auto auto", gap: 6, background: "var(--asc-surface)", border: surfaceBorder, borderRadius: "var(--asc-radius-lg)", padding: 8, boxShadow: "var(--asc-shadow-sm)" };
 const filterInput: CSSProperties = { border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", padding: "7px 8px", minWidth: 0, color: "var(--asc-text)", fontSize: 13 };
 const filterSelect: CSSProperties = { ...filterInput };
-const card: CSSProperties = { background: "var(--asc-surface)", border: "1px solid transparent", borderRadius: "var(--asc-radius-lg)", padding: 10, boxShadow: "var(--asc-shadow-sm)" };
+const card: CSSProperties = { background: "var(--asc-surface)", border: surfaceBorder, borderRadius: "var(--asc-radius-lg)", padding: 10, boxShadow: "var(--asc-shadow-sm)" };
 const sectionHead: CSSProperties = { display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", marginBottom: 8 };
 const sectionTitle: CSSProperties = { margin: 0, fontSize: 16, fontWeight: 950 };
 const muted: CSSProperties = { margin: 0, color: "var(--asc-text-muted)", fontSize: 13 };
-const tableWrap: CSSProperties = { overflow: "auto", border: "1px solid transparent", borderRadius: "var(--asc-radius-lg)", boxShadow: "var(--asc-shadow-sm)", background: "var(--asc-surface)" };
+const tableWrap: CSSProperties = { overflow: "auto", border: surfaceBorder, borderRadius: "var(--asc-radius-lg)", boxShadow: "var(--asc-shadow-sm)", background: "var(--asc-surface)" };
 const table: CSSProperties = { width: "100%", borderCollapse: "collapse", fontSize: 13 };
 const th: CSSProperties = { textAlign: "left", padding: "8px 10px", background: "var(--asc-bg-subtle)", borderBottom: "1px solid var(--asc-row-divider)", color: "var(--asc-text-subtle)", fontSize: 12, fontWeight: 900, whiteSpace: "nowrap" };
 const td: CSSProperties = { padding: "8px 10px", borderBottom: "1px solid var(--asc-row-divider)", verticalAlign: "top", whiteSpace: "nowrap" };
@@ -1819,8 +1828,8 @@ const inlineDeleteForm: CSSProperties = { margin: 0 };
 const smallButton: CSSProperties = { border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-primary)", color: "#fff", padding: "8px 10px", fontWeight: 900, cursor: "pointer", textDecoration: "none" };
 const lightButton: CSSProperties = { ...smallButton, background: "var(--asc-bg-subtle)", color: "var(--asc-text)", textAlign: "center" };
 const primaryButton: CSSProperties = { border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-primary)", color: "#fff", padding: "9px 11px", fontWeight: 900, cursor: "pointer" };
-const secondaryButton: CSSProperties = { border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", color: "var(--asc-text)", padding: "8px 10px", fontWeight: 900, cursor: "pointer" };
-const badge: CSSProperties = { display: "inline-flex", alignItems: "center", borderRadius: "var(--asc-radius-md)", border: "1px solid transparent", padding: "3px 7px", background: "var(--asc-bg-subtle)", color: "var(--asc-text-subtle)", fontWeight: 900, fontSize: 12 };
+const secondaryButton: CSSProperties = { border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-primary-soft)", color: "var(--asc-primary-deep)", padding: "8px 10px", fontWeight: 900, cursor: "pointer" };
+const badge: CSSProperties = { display: "inline-flex", alignItems: "center", borderRadius: "var(--asc-radius-md)", borderWidth: 1, borderStyle: "solid", borderColor: "transparent", padding: "3px 7px", background: "var(--asc-bg-subtle)", color: "var(--asc-text-subtle)", fontWeight: 900, fontSize: 12 };
 const toneStyles: Record<Tone, CSSProperties> = {
   gray: { borderColor: "transparent", background: "var(--asc-bg-subtle)", color: "var(--asc-text-subtle)" },
   blue: { borderColor: "transparent", background: "var(--asc-info-soft)", color: "var(--asc-info)" },
@@ -1870,11 +1879,13 @@ const sheetBody: CSSProperties = { padding: 12, overflow: "auto", minHeight: 0 }
 const sheetSection: CSSProperties = { border: "1px solid transparent", borderRadius: "var(--asc-radius-lg)", background: "var(--asc-bg-subtle)", padding: 10, marginBottom: 10 };
 const sheetTitle: CSSProperties = { margin: "0 0 10px", fontSize: 16, fontWeight: 950 };
 const stack: CSSProperties = { display: "grid", gap: 9 };
-const input: CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", color: "var(--asc-text)", padding: "8px 9px", minWidth: 0, fontSize: 13 };
+const input: CSSProperties = { width: "100%", boxSizing: "border-box", border: surfaceBorder, borderRadius: "var(--asc-radius-md)", background: "var(--asc-surface)", color: "var(--asc-text)", padding: "8px 9px", minWidth: 0, fontSize: 13, boxShadow: "var(--asc-shadow-sm)" };
 const twoCols: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 };
-const sheetSubtleBox: CSSProperties = { display: "grid", gap: 3, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", padding: 9, color: "var(--asc-text)", fontSize: 13 };
+const sheetSubtleBox: CSSProperties = { display: "grid", gap: 3, border: surfaceBorder, borderRadius: "var(--asc-radius-md)", background: "var(--asc-surface)", padding: 9, color: "var(--asc-text)", fontSize: 13 };
 const testChoiceMeta: CSSProperties = { margin: "3px 0 0", color: "var(--asc-text-muted)", fontSize: 12 };
-const omrCreateForm: CSSProperties = { display: "grid", gap: 10, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", padding: 10 };
+const testSetupCallout: CSSProperties = { display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", padding: 10, color: "var(--asc-text)", fontSize: 13 };
+const testSetupCopy: CSSProperties = { display: "grid", gap: 4, minWidth: 0, color: "var(--asc-text)" };
+const omrCreateForm: CSSProperties = { display: "grid", gap: 10, border: surfaceBorder, borderRadius: "var(--asc-radius-md)", background: "var(--asc-surface)", padding: 10 };
 const omrCreateSettingsGrid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8 };
 const omrCreateFieldLabel: CSSProperties = { display: "grid", gap: 4, color: "var(--asc-text-muted)", fontSize: 12 };
 const studentReviewGrid: CSSProperties = {
@@ -1891,7 +1902,7 @@ const reviewAnswerPane: CSSProperties = { display: "grid", gridTemplateRows: "au
 const studentNavButtons: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 8 };
 const disabledNav: CSSProperties = { ...secondaryButton, opacity: .45, textAlign: "center", cursor: "default" };
 const reviewStudentList: CSSProperties = { display: "grid", gap: 6, overflow: "auto", paddingRight: 2 };
-const reviewStudentItem: CSSProperties = { border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", padding: 9, textDecoration: "none", color: "var(--asc-text)", background: "var(--asc-bg-subtle)", display: "grid", gap: 3 };
+const reviewStudentItem: CSSProperties = { borderWidth: 1, borderStyle: "solid", borderColor: "transparent", borderRadius: "var(--asc-radius-md)", padding: 9, textDecoration: "none", color: "var(--asc-text)", background: "var(--asc-bg-subtle)", display: "grid", gap: 3 };
 const reviewStudentSelected: CSSProperties = { borderColor: "var(--asc-primary)", boxShadow: "inset 3px 0 0 var(--asc-primary)", background: "var(--asc-primary-soft)" };
 const reviewStudentNeedsReview: CSSProperties = { background: "var(--asc-warning-soft)" };
 const reviewStudentName: CSSProperties = { fontSize: 13, fontWeight: 950 };

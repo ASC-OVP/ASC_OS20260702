@@ -604,7 +604,7 @@ Allowed server actions:
 Route-only quick actions:
 
 - `업무 추가` -> `/tasks/new?date=YYYY-MM-DD`
-- `반 수업 등록` -> `/classes/new`
+- `반 수업 등록` -> `/classes?create=1`
 - `업무 상세 보기` -> `/tasks/[taskId]`
 - `반 상세 보기` -> `/classes/[classGroupId]`
 - `이 반 학생 보기` -> `/students?classGroupId=...`

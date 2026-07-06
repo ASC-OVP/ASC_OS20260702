@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     return redirectTo(createdClassGroupId ? `/classes?classGroupId=${createdClassGroupId}` : "/classes");
   } catch (error) {
     const errorParam = classGroupCreateErrorParam(error);
-    if (errorParam) return redirectTo(`/classes/new?error=${errorParam}`);
+    if (errorParam) return redirectTo(`/classes?create=1&error=${errorParam}`);
     throw error;
   }
 }

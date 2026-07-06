@@ -20,6 +20,7 @@ import type {
   RecentActivityItem,
   TodayClassOperation,
 } from "@/features/dashboard/types";
+import { surfaceBorder } from "@/lib/styles";
 
 const defaultFilters: DashboardFilterState = {
   query: "",
@@ -725,19 +726,19 @@ function detailRiskItems(item: OperationsInboxItem) {
 }
 
 const pageStack: CSSProperties = { display: "grid", gap: 10, fontSize: 13 };
-const scopeBar: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 10px", border: "1px solid transparent", borderRadius: 8, background: "var(--asc-surface)", boxShadow: "var(--asc-shadow-sm)" };
+const scopeBar: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 10px", border: surfaceBorder, borderRadius: 8, background: "var(--asc-surface)", boxShadow: "var(--asc-shadow-sm)" };
 const scopeGroup: CSSProperties = { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", minWidth: 0 };
 const scopeItem: CSSProperties = { minHeight: 26, display: "inline-flex", alignItems: "center", gap: 5, padding: "0 8px", border: "1px solid transparent", borderRadius: 6, background: "var(--asc-bg-subtle)" };
 const scopeLabel: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 11, fontWeight: 850 };
 const scopeValue: CSSProperties = { color: "var(--asc-text)", fontSize: 12, fontWeight: 950 };
 const scopeUpdated: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 11, fontWeight: 850, whiteSpace: "nowrap" };
-const filterPanel: CSSProperties = { background: "var(--asc-surface)", border: "1px solid transparent", borderRadius: 8, padding: 8, display: "grid", gap: 6, boxShadow: "var(--asc-shadow-sm)" };
+const filterPanel: CSSProperties = { background: "var(--asc-surface)", border: surfaceBorder, borderRadius: 8, padding: 8, display: "grid", gap: 6, boxShadow: "var(--asc-shadow-sm)" };
 const filterFields: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(220px, 1.5fr) minmax(112px, .55fr) minmax(150px, .8fr) 84px", gap: 8, alignItems: "center" };
 const filterControl: CSSProperties = { minHeight: 32, padding: "5px 9px", fontSize: 12 };
 const filterResetButton: CSSProperties = { minHeight: 32, padding: "0 10px", fontSize: 12 };
 const activeFilters: CSSProperties = { display: "flex", flexWrap: "wrap", gap: 5 };
 const summaryGrid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(6, minmax(124px, 1fr))", gap: 8 };
-const summaryCard: CSSProperties = { border: "1px solid transparent", borderRadius: 8, padding: "8px 9px", background: "var(--asc-surface)", display: "flex", flexDirection: "column", gap: 5, minHeight: 74, color: "var(--asc-text)", textDecoration: "none", boxShadow: "var(--asc-shadow-sm)" };
+const summaryCard: CSSProperties = { border: surfaceBorder, borderRadius: 8, padding: "8px 9px", background: "var(--asc-surface)", display: "flex", flexDirection: "column", gap: 5, minHeight: 74, color: "var(--asc-text)", textDecoration: "none", boxShadow: "var(--asc-shadow-sm)" };
 const summaryCardTop: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 };
 const summaryIcon: CSSProperties = { minWidth: 28, height: 28, borderRadius: 7, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 950 };
 const summaryLabel: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 11, fontWeight: 950 };
@@ -747,21 +748,21 @@ const summaryUnavailableValue: CSSProperties = { fontSize: 13, lineHeight: 1.15 
 const summaryMetricList: CSSProperties = { display: "flex", flexWrap: "wrap", gap: 4, maxHeight: 15, overflow: "hidden" };
 const summaryNote: CSSProperties = { color: "var(--asc-text-subtle)", fontSize: 10, fontWeight: 800, lineHeight: 1.2, whiteSpace: "nowrap" };
 const mainGrid: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(720px, 1fr) minmax(330px, 370px)", gap: 10, alignItems: "start" };
-const panel: CSSProperties = { background: "var(--asc-surface)", border: "1px solid transparent", borderRadius: 8, padding: 10, display: "grid", gap: 8, boxShadow: "var(--asc-shadow-sm)" };
+const panel: CSSProperties = { background: "var(--asc-surface)", border: surfaceBorder, borderRadius: 8, padding: 10, display: "grid", gap: 8, boxShadow: "var(--asc-shadow-sm)" };
 const panelHeader: CSSProperties = { display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" };
 const panelTitle: CSSProperties = { margin: 0, fontSize: 16, fontWeight: 950 };
 const panelDescription: CSSProperties = { margin: "3px 0 0", color: "var(--asc-text-muted)", fontSize: 12, fontWeight: 800 };
 const queueToolbar: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", borderTop: "1px solid var(--asc-border-subtle)", paddingTop: 8 };
 const tabList: CSSProperties = { display: "flex", flexWrap: "wrap", gap: 5 };
-const tabButton: CSSProperties = { border: "1px solid transparent", borderRadius: 6, background: "var(--asc-bg-subtle)", padding: "6px 9px", color: "var(--asc-text-subtle)", fontSize: 12, fontWeight: 900, cursor: "pointer" };
-const activeTabButton: CSSProperties = { ...tabButton, background: "var(--asc-primary-soft)", color: "var(--asc-primary-hover)", boxShadow: "inset 0 0 0 1px rgba(11, 80, 208, 0.12)" };
+const tabButton: CSSProperties = { border: "1px solid transparent", borderRadius: 6, background: "var(--asc-toggle-bg)", padding: "6px 9px", color: "var(--asc-text-subtle)", fontSize: 12, fontWeight: 900, cursor: "pointer" };
+const activeTabButton: CSSProperties = { ...tabButton, background: "var(--asc-toggle-active-bg)", color: "var(--asc-toggle-active-text)" };
 const queueFilters: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(96px, 1fr))", gap: 6, minWidth: 330 };
 const queueSelect: CSSProperties = { minHeight: 30, padding: "5px 8px", fontSize: 12 };
 const queueColumns = "86px 64px minmax(170px, 1.25fr) minmax(124px, .85fr) minmax(70px, .55fr) minmax(90px, .65fr) minmax(70px, .5fr)";
-const inboxList: CSSProperties = { border: "1px solid transparent", borderRadius: 8, overflow: "auto", maxHeight: 470, background: "var(--asc-surface)", boxShadow: "var(--asc-shadow-sm)" };
+const inboxList: CSSProperties = { border: surfaceBorder, borderRadius: 8, overflow: "auto", maxHeight: 470, background: "var(--asc-surface)", boxShadow: "var(--asc-shadow-sm)" };
 const queueHead: CSSProperties = { display: "grid", gridTemplateColumns: queueColumns, alignItems: "center", minWidth: 760, position: "sticky", top: 0, zIndex: 1, background: "var(--asc-bg-subtle)", borderBottom: "1px solid var(--asc-row-divider)", color: "var(--asc-text-muted)", fontSize: 11, fontWeight: 950, padding: "7px 10px" };
 const queueRow: CSSProperties = { width: "100%", minWidth: 760, minHeight: 42, display: "grid", gridTemplateColumns: queueColumns, alignItems: "center", borderWidth: 0, borderBottomWidth: 1, borderBottomStyle: "solid", borderBottomColor: "var(--asc-row-divider)", background: "var(--asc-surface)", color: "var(--asc-text)", padding: "8px 10px", textAlign: "left", cursor: "pointer", font: "inherit" };
-const activeQueueRow: CSSProperties = { ...queueRow, background: "var(--asc-primary-soft)", boxShadow: "inset 3px 0 0 var(--asc-primary)" };
+const activeQueueRow: CSSProperties = { ...queueRow, background: "var(--asc-accent-soft)", boxShadow: "inset 3px 0 0 var(--asc-accent)" };
 const inboxEmpty: CSSProperties = { padding: 12 };
 const queuePriorityCell: CSSProperties = { minWidth: 0, display: "flex", alignItems: "center" };
 const queueTypeCell: CSSProperties = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--asc-text-subtle)", fontSize: 12, fontWeight: 950 };
@@ -770,7 +771,7 @@ const queueMutedCell: CSSProperties = { minWidth: 0, overflow: "hidden", textOve
 const queueDueCell: CSSProperties = { ...queueMutedCell, color: "var(--asc-danger)" };
 const queueStatusCell: CSSProperties = { ...queueMutedCell, color: "var(--asc-text)", fontWeight: 900 };
 const badgeGroup: CSSProperties = { display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center" };
-const detailPanel: CSSProperties = { background: "var(--asc-surface)", border: "1px solid transparent", borderRadius: 8, padding: 10, position: "sticky", top: 10, display: "grid", gap: 8, alignContent: "start", boxShadow: "var(--asc-shadow-sm)" };
+const detailPanel: CSSProperties = { background: "var(--asc-surface)", border: surfaceBorder, borderRadius: 8, padding: 10, position: "sticky", top: 10, display: "grid", gap: 8, alignContent: "start", boxShadow: "var(--asc-shadow-sm)" };
 const detailHero: CSSProperties = { display: "grid", gap: 6, border: "1px solid transparent", borderRadius: 8, background: "var(--asc-bg-subtle)", padding: 9 };
 const detailHeroTop: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 };
 const detailHeroMeta: CSSProperties = { display: "grid", gap: 2, color: "var(--asc-text-muted)", fontSize: 11, fontWeight: 850, textAlign: "right", whiteSpace: "nowrap" };
@@ -791,7 +792,7 @@ const recommendedSecondaryGrid: CSSProperties = { display: "grid", gridTemplateC
 const recommendedSecondaryAction: CSSProperties = { border: "1px solid transparent", borderRadius: 8, background: "var(--asc-bg-subtle)", color: "var(--asc-text)", minHeight: 28, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 8px", textDecoration: "none", fontSize: 11, fontWeight: 900, textAlign: "center" };
 const recommendedResolveAction: CSSProperties = { ...recommendedSecondaryAction, color: "var(--asc-success)", background: "var(--asc-success-soft)" };
 const secondaryGrid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 };
-const widgetPanel: CSSProperties = { background: "var(--asc-surface)", border: "1px solid transparent", borderRadius: 8, padding: 10, display: "grid", gap: 8, alignContent: "start", boxShadow: "var(--asc-shadow-sm)" };
+const widgetPanel: CSSProperties = { background: "var(--asc-surface)", border: surfaceBorder, borderRadius: 8, padding: 10, display: "grid", gap: 8, alignContent: "start", boxShadow: "var(--asc-shadow-sm)" };
 const widgetHeader: CSSProperties = { display: "flex", justifyContent: "space-between", gap: 7, alignItems: "center" };
 const widgetTitle: CSSProperties = { margin: 0, fontSize: 14, fontWeight: 950 };
 const smallLink: CSSProperties = { color: "var(--asc-primary)", textDecoration: "none", fontWeight: 900, whiteSpace: "nowrap", fontSize: 11 };

@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import type { CSSProperties, ChangeEvent, ClipboardEvent } from "react";
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createStudentsFromExcelUpload } from "@/features/students/actions/studentActions";
 import { formatPhoneNumber, normalizePhoneNumber, phoneLastDigits } from "@/lib/phone";
@@ -10,7 +10,7 @@ type UploadField = "unused" | "name" | "phone" | "parentPhone" | "schoolName" | 
 
 type UploadColumn = { id: string; field: UploadField; width: number };
 
-type ClassGroupOption = { id: string; name: string; teacherName?: string };
+type ClassGroupOption = { id: string; name: string; teacherName?: string; status?: string | null; effectiveStatus?: string | null };
 type ExistingStudent = { id: string; name: string; phone: string; parentPhone: string };
 type RowValidation = { index: number; errors: string[]; warnings: string[] };
 
@@ -76,9 +76,11 @@ const uploadHeaderLabels = new Set(
 
 export default function StudentExcelUploadModal({ classGroups, existingStudents, defaultClassGroupId }: Props) {
   const router = useRouter();
+  const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
+  const modalRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [open, setOpen] = useState(false);
-  const [targetClassGroupId, setTargetClassGroupId] = useState(defaultClassGroupId ?? "");
+  const [targetClassGroupIds, setTargetClassGroupIds] = useState<string[]>(() => (defaultClassGroupId ? [defaultClassGroupId] : []));
   const [columns, setColumns] = useState<UploadColumn[]>(() => createDefaultColumns());
   const [rows, setRows] = useState<string[][]>(() => blankRows(rowCountDefault, defaultUploadFields.length));
   const [selectedRows, setSelectedRows] = useState<Set<number>>(() => new Set());
@@ -86,14 +88,20 @@ export default function StudentExcelUploadModal({ classGroups, existingStudents,
   const [result, setResult] = useState("");
   const [isPending, startTransition] = useTransition();
 
-  const targetClassGroup = useMemo(() => classGroups.find((classGroup) => classGroup.id === targetClassGroupId) ?? null, [classGroups, targetClassGroupId]);
+  const operatingClassGroups = useMemo(() => classGroups.filter((classGroup) => !isEndedClassGroup(classGroup)), [classGroups]);
+  const defaultOperatingClassGroupId = useMemo(
+    () => (defaultClassGroupId && operatingClassGroups.some((classGroup) => classGroup.id === defaultClassGroupId) ? defaultClassGroupId : null),
+    [defaultClassGroupId, operatingClassGroups]
+  );
+  const targetClassGroups = useMemo(() => targetClassGroupIds.map((id) => classGroups.find((classGroup) => classGroup.id === id)).filter((classGroup): classGroup is ClassGroupOption => Boolean(classGroup)), [classGroups, targetClassGroupIds]);
+  const targetClassGroupLabel = targetClassGroups.length === 0 ? "" : targetClassGroups.length === 1 ? targetClassGroups[0].name : `${targetClassGroups[0].name} 외 ${targetClassGroups.length - 1}`;
   const activeIndexes = useMemo(() => activeRowIndexes(rows), [rows]);
   const duplicateFields = useMemo(() => duplicatedMappedFields(columns), [columns]);
   const hasNameMapping = columns.some((column) => column.field === "name");
   const parsedRows = useMemo(() => rows.map((row) => parseUploadRow(row, columns)), [columns, rows]);
   const validation = useMemo(
-    () => validateRows(parsedRows, activeIndexes, existingStudents, targetClassGroup?.name ?? "", duplicateFields),
-    [activeIndexes, duplicateFields, existingStudents, parsedRows, targetClassGroup?.name]
+    () => validateRows(parsedRows, activeIndexes, existingStudents, targetClassGroupLabel, duplicateFields),
+    [activeIndexes, duplicateFields, existingStudents, parsedRows, targetClassGroupLabel]
   );
   const summary = useMemo(() => {
     const errorRows = validation.filter((item) => item.errors.length > 0);
@@ -105,12 +113,32 @@ export default function StudentExcelUploadModal({ classGroups, existingStudents,
       errors: errorRows.length,
     };
   }, [activeIndexes.length, validation]);
-  const globalErrors = [!targetClassGroupId ? "추가할 반을 선택해야 합니다." : "", !hasNameMapping ? "학생명으로 매핑된 열이 필요합니다." : ""].filter(Boolean);
+  const globalErrors = [targetClassGroupIds.length === 0 ? "추가할 반을 선택해야 합니다." : "", !hasNameMapping ? "학생명으로 매핑된 열이 필요합니다." : ""].filter(Boolean);
   const canSubmit = !isPending && summary.valid > 0 && globalErrors.length === 0;
 
+  useEffect(() => {
+    if (!open) return;
+
+    modalRef.current?.focus();
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape" || isPending) return;
+      setOpen(false);
+      window.setTimeout(() => triggerButtonRef.current?.focus(), 0);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, isPending]);
+
   function openModal() {
-    setTargetClassGroupId(defaultClassGroupId ?? "");
+    setTargetClassGroupIds(defaultOperatingClassGroupId ? [defaultOperatingClassGroupId] : []);
     setOpen(true);
+  }
+
+  function closeModal() {
+    if (isPending) return;
+    setOpen(false);
+    window.setTimeout(() => triggerButtonRef.current?.focus(), 0);
   }
 
   function resetRows() {
@@ -206,9 +234,14 @@ export default function StudentExcelUploadModal({ classGroups, existingStudents,
 
   function toggleAllActiveRows() {
     setSelectedRows((current) => {
-      if (activeIndexes.length > 0 && activeIndexes.every((index) => current.has(index))) return new Set();
-      return new Set(activeIndexes);
+      const allIndexes = rows.map((_, index) => index);
+      if (allIndexes.length > 0 && allIndexes.every((index) => current.has(index))) return new Set();
+      return new Set(allIndexes);
     });
+  }
+
+  function toggleTargetClassGroup(classGroupId: string) {
+    setTargetClassGroupIds((current) => (current.includes(classGroupId) ? current.filter((id) => id !== classGroupId) : [...current, classGroupId]));
   }
 
   function downloadSample() {
@@ -251,7 +284,7 @@ export default function StudentExcelUploadModal({ classGroups, existingStudents,
   }
 
   function submitStudents() {
-    if (!targetClassGroupId) {
+    if (targetClassGroupIds.length === 0) {
       setMessage("추가할 반을 먼저 선택해주세요.");
       return;
     }
@@ -276,7 +309,7 @@ export default function StudentExcelUploadModal({ classGroups, existingStudents,
         parentPhone: row.parentPhone,
         schoolName: row.schoolName,
         grade: row.grade,
-        classGroupId: targetClassGroupId,
+        classGroupIds: targetClassGroupIds,
         subject: row.subject,
         currentLevel: row.currentLevel,
         memo: row.memo,
@@ -305,28 +338,42 @@ export default function StudentExcelUploadModal({ classGroups, existingStudents,
 
   return (
     <>
-      <button type="button" onClick={openModal} style={uploadButton}>엑셀 업로드</button>
+      <button
+        ref={triggerButtonRef}
+        type="button"
+        onMouseDown={(event) => {
+          if (event.button !== 0) return;
+          openModal();
+        }}
+        onClick={openModal}
+        style={uploadButton}
+      >
+        엑셀 업로드
+      </button>
 
       {open && (
-        <div style={overlay} role="dialog" aria-modal="true" aria-label="학생 엑셀 업로드">
-          <div style={modal}>
+        <div style={overlay} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeModal(); }}>
+          <div ref={modalRef} style={modal} role="dialog" aria-modal="true" aria-labelledby="student-excel-upload-title" tabIndex={-1}>
             <header style={modalHeader}>
               <div>
-                <h2 style={modalTitle}>학생 엑셀 업로드</h2>
+                <h2 id="student-excel-upload-title" style={modalTitle}>학생 엑셀 업로드</h2>
                 <p style={modalDesc}>기존 엑셀 명단을 붙여넣거나 엑셀/CSV 파일로 불러온 뒤, 열 매핑과 대상 반을 확인하고 등록합니다.</p>
               </div>
-              <button type="button" onClick={() => setOpen(false)} style={iconButton} aria-label="닫기">×</button>
+              <button type="button" onClick={closeModal} style={iconButton} aria-label="닫기" disabled={isPending}>×</button>
             </header>
 
             <div style={toolbar}>
               <label style={classSelectLabel}>
                 추가할 반
-                <select value={targetClassGroupId} onChange={(event) => setTargetClassGroupId(event.target.value)} style={classSelect}>
-                  <option value="">반 선택</option>
-                  {classGroups.map((classGroup) => (
-                    <option key={classGroup.id} value={classGroup.id}>{classGroup.teacherName ? `${classGroup.teacherName} / ${classGroup.name}` : classGroup.name}</option>
+                <div style={classMultiSelect}>
+                  {operatingClassGroups.map((classGroup) => (
+                    <label key={classGroup.id} style={classMultiOption}>
+                      <input type="checkbox" checked={targetClassGroupIds.includes(classGroup.id)} onChange={() => toggleTargetClassGroup(classGroup.id)} />
+                      <span>{classGroup.teacherName ? `${classGroup.teacherName} / ${classGroup.name}` : classGroup.name}</span>
+                    </label>
                   ))}
-                </select>
+                  {operatingClassGroups.length === 0 && <span style={emptyClassText}>운영중인 반이 없습니다.</span>}
+                </div>
               </label>
               <button type="button" onClick={downloadSample} style={secondaryButton}>샘플 다운로드</button>
               <button type="button" onClick={() => fileInputRef.current?.click()} style={secondaryButton}>엑셀 파일 업로드</button>
@@ -350,7 +397,7 @@ export default function StudentExcelUploadModal({ classGroups, existingStudents,
                 <thead>
                   <tr>
                     <th style={rowHeader}>
-                      <input type="checkbox" checked={activeIndexes.length > 0 && activeIndexes.every((index) => selectedRows.has(index))} onChange={toggleAllActiveRows} aria-label="활성 행 전체 선택" />
+                      <input type="checkbox" checked={rows.length > 0 && rows.every((_, index) => selectedRows.has(index))} onChange={toggleAllActiveRows} aria-label="전체 행 선택" />
                     </th>
                     {columns.map((column, colIndex) => {
                       const duplicated = column.field !== "unused" && duplicateFields.includes(column.field);
@@ -385,7 +432,7 @@ export default function StudentExcelUploadModal({ classGroups, existingStudents,
                             <input value={getCell(row, colIndex)} onChange={(event) => updateCell(rowIndex, colIndex, event.target.value)} onPaste={(event) => handlePaste(event, rowIndex, colIndex)} placeholder={rowIndex === 0 ? fieldLabel(column.field) : ""} style={cellInput} aria-label={`${rowIndex + 1}행 ${colIndex + 1}열`} />
                           </td>
                         ))}
-                        <td style={actionTd}><button type="button" onClick={() => deleteRow(rowIndex)} style={dangerSmallButton}>삭제</button></td>
+                        <td style={actionTd}><button type="button" onClick={() => deleteRow(rowIndex)} style={dangerIconButton} aria-label={`${rowIndex + 1}행 삭제`}>×</button></td>
                       </tr>
                     );
                   })}
@@ -394,7 +441,7 @@ export default function StudentExcelUploadModal({ classGroups, existingStudents,
             </div>
 
             <footer style={modalFooter}>
-              <button type="button" onClick={() => setOpen(false)} style={ghostButton}>취소</button>
+              <button type="button" onClick={closeModal} style={ghostButton} disabled={isPending}>취소</button>
               <button type="button" onClick={submitStudents} disabled={!canSubmit} style={{ ...primaryButton, ...(!canSubmit ? disabledButton : {}) }}>학생 등록</button>
             </footer>
           </div>
@@ -746,12 +793,16 @@ function normalizeText(value: string) {
   return value.trim().replace(/\s+/g, " ").toLocaleLowerCase();
 }
 
+function isEndedClassGroup(classGroup: ClassGroupOption) {
+  return classGroup.effectiveStatus === "ENDED" || classGroup.status === "ENDED";
+}
+
 function normalizeHeaderCell(value: string) {
   return value.trim().replace(/[\s:_\-(){}\[\]<>]/g, "").toLocaleLowerCase();
 }
 
 const uploadButton: CSSProperties = { height: 32, display: "inline-flex", alignItems: "center", border: "1px solid transparent", background: "var(--asc-primary-soft)", color: "var(--asc-primary-hover)", borderRadius: "var(--asc-radius-md)", padding: "0 11px", fontSize: 13, fontWeight: 900, whiteSpace: "nowrap", cursor: "pointer" };
-const overlay: CSSProperties = { position: "fixed", inset: 0, zIndex: 80, background: "rgba(15,23,42,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 };
+const overlay: CSSProperties = { position: "fixed", inset: 0, zIndex: 1400, background: "rgba(15,23,42,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 };
 const modal: CSSProperties = { width: "min(1360px, 96vw)", maxHeight: "92vh", background: "var(--asc-surface)", border: "1px solid transparent", borderRadius: "var(--asc-radius-lg)", boxShadow: "var(--asc-shadow-modal)", display: "grid", gridTemplateRows: "auto auto auto minmax(320px, 1fr) auto", overflow: "hidden" };
 const modalHeader: CSSProperties = { display: "flex", justifyContent: "space-between", gap: 16, padding: "14px 18px 10px", borderBottom: "1px solid var(--asc-border-subtle)" };
 const modalTitle: CSSProperties = { margin: 0, fontSize: 20, fontWeight: 950, color: "var(--asc-text)" };
@@ -759,7 +810,9 @@ const modalDesc: CSSProperties = { margin: "6px 0 0", color: "var(--asc-text-mut
 const iconButton: CSSProperties = { width: 32, height: 32, border: 0, borderRadius: 0, background: "transparent", fontSize: 22, cursor: "pointer", color: "var(--asc-text)" };
 const toolbar: CSSProperties = { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "10px 18px", borderBottom: "1px solid var(--asc-border-subtle)" };
 const classSelectLabel: CSSProperties = { display: "inline-flex", alignItems: "center", gap: 8, color: "var(--asc-text)", fontSize: 13, fontWeight: 900 };
-const classSelect: CSSProperties = { height: 32, minWidth: 230, border: "1px solid transparent", borderRadius: "var(--asc-radius-lg)", background: "var(--asc-bg-subtle)", padding: "0 10px", color: "var(--asc-text)", fontSize: 13, fontWeight: 800 };
+const classMultiSelect: CSSProperties = { minWidth: 260, maxWidth: 360, maxHeight: 92, overflowY: "auto", display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 4, padding: 6, borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)" };
+const classMultiOption: CSSProperties = { minWidth: 0, display: "grid", gridTemplateColumns: "18px minmax(0, 1fr)", alignItems: "center", gap: 5, color: "var(--asc-text)", fontSize: 12, fontWeight: 800 };
+const emptyClassText: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 12, fontWeight: 800 };
 const secondaryButton: CSSProperties = { height: 32, border: "1px solid transparent", borderRadius: "var(--asc-radius-lg)", background: "var(--asc-bg-subtle)", color: "var(--asc-text)", padding: "0 12px", fontWeight: 900, cursor: "pointer" };
 const hintText: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 12, fontWeight: 700 };
 const summaryBar: CSSProperties = { display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "8px 18px", borderBottom: "1px solid var(--asc-border-subtle)", fontSize: 13 };
@@ -769,7 +822,7 @@ const sheetTable: CSSProperties = { borderCollapse: "collapse", minWidth: 1100, 
 const rowHeader: CSSProperties = { position: "sticky", left: 0, zIndex: 2, width: 74, minWidth: 74, border: "1px solid var(--asc-row-divider)", background: "var(--asc-bg-subtle)", color: "var(--asc-text-subtle)", textAlign: "center", fontWeight: 900 };
 const th: CSSProperties = { height: 58, border: "1px solid var(--asc-row-divider)", background: "var(--asc-primary-soft)", color: "var(--asc-text)", fontWeight: 950, textAlign: "center", padding: 4 };
 const columnNumber: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 11, fontWeight: 900 };
-const mappingSelect: CSSProperties = { width: "100%", height: 26, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", color: "var(--asc-text)", fontSize: 12, fontWeight: 800 };
+const mappingSelect: CSSProperties = { width: "100%", height: 26, borderWidth: 1, borderStyle: "solid", borderColor: "transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", color: "var(--asc-text)", fontSize: 12, fontWeight: 800 };
 const duplicateSelect: CSSProperties = { borderColor: "var(--asc-warning)", background: "var(--asc-warning-soft)" };
 const actionHeader: CSSProperties = { ...th, minWidth: 62, background: "var(--asc-bg-subtle)" };
 const td: CSSProperties = { border: "1px solid var(--asc-row-divider)", padding: 0, height: 32, background: "inherit" };
@@ -781,7 +834,7 @@ const warningRow: CSSProperties = { background: "var(--asc-warning-soft)" };
 const errorText: CSSProperties = { color: "var(--asc-danger)", fontWeight: 900, lineHeight: 1.6 };
 const errorBadge: CSSProperties = { marginLeft: 4, color: "var(--asc-danger)", fontSize: 10, fontWeight: 950 };
 const warningBadge: CSSProperties = { marginLeft: 4, color: "var(--asc-warning-text)", fontSize: 10, fontWeight: 950 };
-const dangerSmallButton: CSSProperties = { height: 24, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-danger-soft)", color: "var(--asc-danger)", padding: "0 8px", fontSize: 11, fontWeight: 900, cursor: "pointer" };
+const dangerIconButton: CSSProperties = { width: 24, height: 24, border: 0, borderRadius: 4, background: "transparent", color: "var(--asc-danger)", fontSize: 18, fontWeight: 950, lineHeight: 1, cursor: "pointer" };
 const modalFooter: CSSProperties = { display: "flex", justifyContent: "flex-end", gap: 8, padding: 14, borderTop: "1px solid var(--asc-border-subtle)", background: "var(--asc-bg)" };
 const ghostButton: CSSProperties = { height: 34, border: 0, background: "transparent", color: "var(--asc-text)", padding: "0 12px", fontWeight: 900, cursor: "pointer" };
 const primaryButton: CSSProperties = { height: 34, border: "1px solid transparent", borderRadius: "var(--asc-radius-lg)", background: "var(--asc-primary)", color: "#fff", padding: "0 14px", fontWeight: 950, cursor: "pointer" };

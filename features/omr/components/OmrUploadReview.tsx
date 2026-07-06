@@ -469,7 +469,7 @@ const smallButton: CSSProperties = { border: "1px solid transparent", borderRadi
 const lightButton: CSSProperties = { ...smallButton, background: "var(--asc-bg-subtle)", color: "var(--asc-text)", textAlign: "center" };
 const primaryButton: CSSProperties = { border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-primary)", color: "#fff", padding: "9px 11px", fontWeight: 900, cursor: "pointer" };
 const secondaryButton: CSSProperties = { border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", color: "var(--asc-text)", padding: "8px 10px", fontWeight: 900, cursor: "pointer", textDecoration: "none", textAlign: "center" };
-const badge: CSSProperties = { display: "inline-flex", alignItems: "center", borderRadius: "var(--asc-radius-md)", border: "1px solid transparent", padding: "3px 7px", background: "var(--asc-bg-subtle)", color: "var(--asc-text-subtle)", fontWeight: 900, fontSize: 12 };
+const badge: CSSProperties = { display: "inline-flex", alignItems: "center", borderRadius: "var(--asc-radius-md)", borderWidth: 1, borderStyle: "solid", borderColor: "transparent", padding: "3px 7px", background: "var(--asc-bg-subtle)", color: "var(--asc-text-subtle)", fontWeight: 900, fontSize: 12 };
 const toneStyles: Record<Tone, CSSProperties> = {
   gray: { borderColor: "transparent", background: "var(--asc-bg-subtle)", color: "var(--asc-text-subtle)" },
   blue: { borderColor: "transparent", background: "var(--asc-info-soft)", color: "var(--asc-info)" },
@@ -484,7 +484,7 @@ const reviewAnswerPane: CSSProperties = { display: "grid", gridTemplateRows: "au
 const studentNavButtons: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 8 };
 const disabledNav: CSSProperties = { ...secondaryButton, opacity: .45, cursor: "default" };
 const reviewStudentList: CSSProperties = { display: "grid", gap: 4, overflow: "auto", paddingRight: 2, alignContent: "start" };
-const reviewStudentItem: CSSProperties = { border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", padding: "6px 7px", textDecoration: "none", color: "var(--asc-text)", background: "var(--asc-bg-subtle)", display: "grid", gap: 2 };
+const reviewStudentItem: CSSProperties = { borderWidth: 1, borderStyle: "solid", borderColor: "transparent", borderRadius: "var(--asc-radius-md)", padding: "6px 7px", textDecoration: "none", color: "var(--asc-text)", background: "var(--asc-bg-subtle)", display: "grid", gap: 2 };
 const reviewStudentSelected: CSSProperties = { boxShadow: "inset 3px 0 0 var(--asc-primary)", background: "var(--asc-primary-soft)" };
 const reviewStudentNeedsReview: CSSProperties = { background: "var(--asc-warning-soft)" };
 const reviewStudentHeader: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 6, alignItems: "center" };
