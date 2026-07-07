@@ -355,6 +355,141 @@ export async function createTaskAction(formData: FormData) {
   redirect("/tasks");
 }
 
+export async function createTaskBatchAction(formData: FormData) {
+  const user = await requireUser();
+  if (!canCreateTask(user.role)) redirect("/tasks?error=permission");
+
+  const rawPayload = text(formData, "payload");
+  if (!rawPayload) redirect("/tasks?error=empty");
+
+  let payload: {
+    rawText?: string;
+    dueDate?: string;
+    taskType?: string;
+    classGroupId?: string;
+    items?: Array<{ title?: string; assigneeIds?: string[] }>;
+  };
+
+  try {
+    payload = JSON.parse(rawPayload);
+  } catch {
+    redirect("/tasks?error=empty");
+  }
+
+  const rawItems = Array.isArray(payload.items) ? payload.items : [];
+  const dueDate = parseDueDate(dateOnlyValue(payload.dueDate) ?? undefined);
+  const type = enumValue(payload.taskType, TASK_TYPES, TaskType.OTHER);
+  const classGroupId = cleanId(payload.classGroupId);
+  const rawTextValue = payload.rawText?.trim() || undefined;
+  const classGroup = classGroupId
+    ? await prisma.classGroup.findFirst({
+        where: { id: classGroupId, academyId: user.academyId },
+        select: {
+          id: true,
+          name: true,
+          startDate: true,
+          endDate: true,
+          teacherId: true,
+          assistantId: true,
+          classAssistants: { select: { assistantId: true } },
+        },
+      })
+    : null;
+
+  const classAssigneeIds = classGroup
+    ? Array.from(new Set([classGroup.assistantId, ...classGroup.classAssistants.map((item) => item.assistantId), classGroup.teacherId].filter((id): id is string => Boolean(id))))
+    : [];
+
+  const normalizedItems = rawItems
+    .map((item) => ({
+      title: item.title?.trim() ?? "",
+      assigneeIds: cleanIds((item.assigneeIds ?? []).map((id) => String(id))),
+    }))
+    .map((item) => ({
+      ...item,
+      assigneeIds: item.assigneeIds.length > 0 ? item.assigneeIds : classAssigneeIds,
+    }))
+    .filter((item) => item.title && item.assigneeIds.length > 0);
+
+  if (normalizedItems.length === 0) redirect("/tasks?error=empty");
+
+  const allAssigneeIds = Array.from(new Set(normalizedItems.flatMap((item) => item.assigneeIds)));
+  const assignees = await prisma.user.findMany({
+    where: {
+      id: { in: allAssigneeIds },
+      academyId: user.academyId,
+      isActive: true,
+      role: { in: ["ADMIN", "MANAGER", "TEACHER", "ASSISTANT"] },
+    },
+    select: { id: true },
+  });
+  const validAssigneeIds = new Set(assignees.map((assignee) => assignee.id));
+
+  let createdCount = 0;
+  const createdTaskIds: string[] = [];
+
+  await prisma.$transaction(async (tx) => {
+    for (const item of normalizedItems) {
+      for (const assigneeId of item.assigneeIds) {
+        if (!validAssigneeIds.has(assigneeId)) continue;
+        const periodWarning = classTaskPeriodWarning(classGroup, undefined, dueDate);
+        const description = [rawTextValue, periodWarning].filter(Boolean).join("\n\n") || undefined;
+        const task = await tx.task.create({
+          data: {
+            academyId: user.academyId,
+            title: item.title,
+            description,
+            type,
+            classGroupId: classGroup?.id,
+            assigneeId,
+            creatorId: user.id,
+            reviewerId: user.id,
+            priority: TaskPriority.NORMAL,
+            dueDate,
+          },
+        });
+
+        createdCount += 1;
+        createdTaskIds.push(task.id);
+
+        await tx.taskAssignee.create({
+          data: {
+            academyId: user.academyId,
+            taskId: task.id,
+            assigneeId,
+          },
+        });
+        await tx.taskChecklistItem.create({
+          data: {
+            taskId: task.id,
+            title: item.title,
+            order: 0,
+          },
+        });
+        await addHistory(tx, {
+          taskId: task.id,
+          fromStatus: null,
+          toStatus: TaskStatus.TODO,
+          changedById: user.id,
+          memo: "업무 일괄 생성",
+        });
+      }
+    }
+  });
+
+  await recordActivity({
+    actor: user,
+    action: "CREATE",
+    entityType: "Task",
+    summary: `업무 일괄 생성: ${createdCount}건`,
+    metadata: { createdCount, createdTaskIds, classGroupId: classGroup?.id ?? null },
+  });
+
+  revalidatePath("/tasks");
+  revalidatePath("/calendar");
+  redirect("/tasks");
+}
+
 export async function createRecurringTaskAction(formData: FormData) {
   const user = await requireUser();
   if (!canCreateTask(user.role)) redirect("/tasks?manage=recurring&error=permission");

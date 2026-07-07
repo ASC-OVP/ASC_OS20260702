@@ -26,9 +26,20 @@ export type DashboardSummaryCard = {
   label: string;
   value: string;
   note: string;
+  detail?: string;
   href?: string;
   severity?: DashboardSignalSeverity;
   unavailable?: boolean;
+  metrics?: Array<{
+    label: string;
+    value: string;
+  }>;
+  progress?: {
+    label: string;
+    value: number;
+    total: number;
+    tone: "green" | "blue" | "purple" | "navy";
+  };
 };
 
 export type DashboardDetailRecord = {

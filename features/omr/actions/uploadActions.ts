@@ -11,11 +11,13 @@ import { prisma } from "@/lib/prisma";
 import { OMR_MAX_BATCH_BYTES, OMR_MAX_FILE_BYTES } from "@/features/omr/lib/omrUploadLimits";
 import { omrHref, optionalText, text } from "@/features/omr/lib/omrForm";
 import { deleteStoredOmrFile, sanitizeFileName } from "@/features/omr/lib/omrFileStorage";
+import { canManageExamForUser } from "@/features/omr/lib/omrPermissions";
 import { recognizeOmrUploadInternal } from "@/features/omr/lib/omrRecognitionRunner";
 import { isOmrAutoRecognizeEnabled, OMR_UPLOAD_STATUSES, PHONE_RECOGNIZE_STATUSES } from "@/features/omr/lib/omrStatus";
 
 export async function uploadOmrAction(formData: FormData) {
   const user = await requireUser();
+  if (!(await canManageExamForUser(user))) return;
   const examId = text(formData, "examId");
   const files = formData
     .getAll("files")
@@ -131,6 +133,7 @@ export async function uploadOmrAction(formData: FormData) {
 
 export async function deleteOmrUploadAction(formData: FormData) {
   const user = await requireUser();
+  if (!(await canManageExamForUser(user))) return;
   const uploadId = text(formData, "uploadId");
   const examId = text(formData, "examId");
 

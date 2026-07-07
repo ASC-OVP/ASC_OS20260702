@@ -1,4 +1,4 @@
-import TaskList from "@/features/tasks/components/TaskList";
+import TaskWorkspace from "@/features/tasks/components/TaskWorkspace";
 
 export const dynamic = "force-dynamic";
 
@@ -7,5 +7,5 @@ type Props = {
 };
 
 export default function TasksPage({ searchParams }: Props) {
-  return <TaskList searchParams={searchParams} />;
+  return <TaskWorkspace searchParams={searchParams} />;
 }

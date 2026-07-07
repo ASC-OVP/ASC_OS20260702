@@ -10,6 +10,7 @@ import { classGroupWhereForUser } from "@/lib/classGroups";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { studentWhereForUser } from "@/lib/scopes";
+import { canComposeMessages, canSendActualMessages, getStaffPermissionSet } from "@/lib/staffPermissions";
 import { ensureDefaultMessageTemplates } from "@/lib/sms/ensureDefaultTemplates";
 import { getSmsProviderStatusForAcademy } from "@/lib/sms/provider";
 
@@ -29,12 +30,26 @@ export default async function MessagesPage({ searchParams }: Props) {
   await ensureDefaultMessageTemplates(user.academyId, user.id);
   const params = (await searchParams) ?? {};
   const activeTab = tabValue(params.tab);
-  const settings = await getSmsProviderStatusForAcademy(user.academyId);
-  const canCompose = user.role === "ADMIN" || user.role === "MANAGER" || user.role === "TEACHER";
-  const canSendActual = user.role === "ADMIN" || user.role === "MANAGER";
+  const [settings, userPermissions] = await Promise.all([
+    getSmsProviderStatusForAcademy(user.academyId),
+    getStaffPermissionSet(user.academyId, user.id),
+  ]);
+  const canCompose = canComposeMessages(user.role, userPermissions);
+  const canSendActual = canSendActualMessages(user.role, userPermissions);
 
   const [classGroups, students, templates, logs, exams] = await Promise.all([
-    prisma.classGroup.findMany({ where: classGroupWhereForUser(user), orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.classGroup.findMany({
+      where: classGroupWhereForUser(user),
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        lessons: {
+          orderBy: [{ position: "asc" }],
+          select: { id: true, position: true, title: true, lessonDate: true, startTime: true, endTime: true },
+        },
+      },
+    }),
     prisma.student.findMany({
       where: studentWhereForUser(user),
       orderBy: [{ name: "asc" }, { createdAt: "asc" }],
@@ -66,7 +81,7 @@ export default async function MessagesPage({ searchParams }: Props) {
         <Tabs label="문자 발송 메뉴" items={tabs.map((tab) => ({ label: tab.label, href: `/messages?tab=${tab.id}`, active: activeTab === tab.id }))} />
         <section style={contentPanel}>
           {activeTab === "compose" && <MessageComposer academyName={user.academy.name} classGroups={classGroups} students={studentOptions} exams={examOptions} templates={templates} settings={settings} canCompose={canCompose} canSendActual={canSendActual} />}
-          {activeTab === "templates" && <MessageTemplateManager templates={templates} selectedCategory={params.category} canManage={canCompose} academyName={user.academy.name} />}
+          {activeTab === "templates" && <MessageTemplateManager templates={templates} classGroups={classGroups} exams={examOptions} selectedCategory={params.category} canManage={canCompose} academyName={user.academy.name} />}
           {activeTab === "logs" && <MessageLogTable logs={logs as MessageLogRow[]} templates={templates.map((template) => ({ id: template.id, name: template.name }))} filters={{ dateFrom: params.dateFrom, dateTo: params.dateTo, status: params.status, templateId: params.templateId, query: params.query, failedOnly: params.failedOnly === "on", jobId: params.jobId }} />}
           {activeTab === "settings" && <MessageSettingsPanel settings={settings} canManage={canSendActual} settingsStatus={params.settingsStatus} />}
           {activeTab === "automation" && <MessageAutomationPanel />}

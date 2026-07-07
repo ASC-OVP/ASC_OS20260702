@@ -378,6 +378,7 @@ function revalidateClassPaths(classGroupId?: string | null) {
   revalidatePath("/students");
   revalidatePath("/classes");
   revalidatePath("/calendar");
+  revalidatePath("/dashboard");
   if (classGroupId) revalidatePath(`/classes/${classGroupId}`);
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent, type CSSProperties, type KeyboardEvent } from "react";
 import { flushSync } from "react-dom";
 import { sendMessageJobAction } from "@/features/messages/actions/messageActions";
 import MessagePreviewList from "@/features/messages/components/MessagePreviewList";
@@ -8,7 +8,8 @@ import { buildMessageRecipients, type MessageStudent } from "@/lib/sms/recipient
 import { messageByteLength, validateTemplateVariables } from "@/lib/sms/renderTemplate";
 import { messageCategories, messageTargetTypes, type MessageTargetType, type SmsProviderStatus, type TemplateContext } from "@/lib/sms/types";
 
-export type MessageClassGroupOption = { id: string; name: string };
+export type MessageClassLessonOption = { id: string; position: number; title: string; lessonDate: string | null; startTime: string | null; endTime: string | null };
+export type MessageClassGroupOption = { id: string; name: string; lessons?: MessageClassLessonOption[] };
 export type MessageStudentOption = { id: string; name: string; phone: string; parentPhone: string; schoolName: string; grade: string; currentLevel: string; classGroupIds: string[]; classGroupNames: string[] };
 export type MessageTemplateOption = { id: string; name: string; category: string; targetType: string; title?: string | null; body: string; isMarketing?: boolean; isActive: boolean };
 export type MessageExamOption = { id: string; title: string; examDate: string; subject: string; classGroupId: string | null; totalScore: number | null; results: Array<{ studentId: string; totalScore: number; maxScore: number; correctCount: number; wrongCount: number; blankCount: number; reviewNeededCount: number }> };
@@ -25,10 +26,68 @@ const variableGroups = [
   ["수업", ["lessonName", "lessonRound", "attendanceStatus", "assignmentName"]],
   ["시험", ["examName", "examDate", "score", "maxScore", "averageScore", "rank", "correctCount", "wrongCount", "blankCount", "weakType", "wrongQuestions", "remedialReason", "reportLink"]],
 ] as const;
+const manualContextFields = [
+  ["className", "반명", "선택한 반명 사용"],
+  ["lessonName", "강의명", "선택한 반명 사용"],
+  ["lessonRound", "차시명", "예: 3차시"],
+  ["lessonDate", "수업일", "예: 2026-07-06"],
+  ["attendanceStatus", "출결 상태", "예: 출석"],
+  ["assignmentName", "과제명", "예: 3단원 오답 정리"],
+  ["examName", "시험명", "선택한 시험명 사용"],
+  ["examDate", "시험일", "선택한 시험일 사용"],
+  ["score", "점수", "예: 87"],
+  ["maxScore", "만점", "예: 100"],
+  ["averageScore", "평균", "예: 76.5"],
+  ["rank", "석차", "예: 4"],
+  ["correctCount", "정답 수", "예: 18"],
+  ["wrongCount", "오답 수", "예: 2"],
+  ["blankCount", "미응답 수", "예: 0"],
+  ["highestScore", "최고점", "예: 98"],
+  ["weakType", "취약 유형", "예: 함수"],
+  ["wrongQuestions", "오답 문항", "예: 3, 7, 12"],
+  ["remedialReason", "보강 사유", "예: 오답률 40% 이상"],
+  ["feedback", "피드백", "예: 오답 복습이 필요합니다."],
+  ["reportName", "리포트명", "예: 7월 학습 리포트"],
+  ["reportLink", "리포트 링크", "https://"],
+] as const;
+type ManualContextKey = (typeof manualContextFields)[number][0];
+const variableLabels: Record<string, string> = {
+  academyName: "학원명",
+  studentName: "학생명",
+  parentName: "학부모명",
+  parentNameSubject: "학부모 호칭",
+  parentNameTopic: "학부모 관계",
+  className: "반명",
+  today: "오늘 날짜",
+  lessonName: "강의명",
+  lessonRound: "차시명",
+  lessonDate: "수업일",
+  attendanceStatus: "출결 상태",
+  assignmentName: "과제명",
+  examName: "시험명",
+  examDate: "시험일",
+  score: "점수",
+  maxScore: "만점",
+  averageScore: "평균",
+  rank: "석차",
+  level: "레벨",
+  correctCount: "정답 수",
+  wrongCount: "오답 수",
+  blankCount: "미응답 수",
+  highestScore: "최고점",
+  feedback: "피드백",
+  weakType: "취약 유형",
+  wrongQuestions: "오답 문항",
+  remedialReason: "보강 사유",
+  reportName: "리포트명",
+  reportLink: "리포트 링크",
+  academyPhone: "학원 연락처",
+};
 
 export default function MessageComposer({ academyName, classGroups, students, exams, templates, settings, canCompose, canSendActual }: Props) {
   const firstTemplate = templates.find((template) => template.isActive) ?? templates[0] ?? null;
   const [classGroupId, setClassGroupId] = useState("all");
+  const [lessonId, setLessonId] = useState("");
   const [examId, setExamId] = useState("");
   const [quickFilter, setQuickFilter] = useState("ALL");
   const [search, setSearch] = useState("");
@@ -39,25 +98,28 @@ export default function MessageComposer({ academyName, classGroups, students, ex
   const [title, setTitle] = useState(firstTemplate?.title || firstTemplate?.name || "운영 알림 문자");
   const [body, setBody] = useState(firstTemplate?.body ?? fallbackBody);
   const [isMarketing, setIsMarketing] = useState(Boolean(firstTemplate?.isMarketing ?? settings.isMarketingDefault));
-  const [manualClassName, setManualClassName] = useState("");
-  const [lessonName, setLessonName] = useState("");
-  const [lessonRound, setLessonRound] = useState("");
-  const [attendanceStatus, setAttendanceStatus] = useState("");
-  const [assignmentName, setAssignmentName] = useState("");
-  const [reportLink, setReportLink] = useState("");
+  const [manualContext, setManualContext] = useState<Record<ManualContextKey, string>>({} as Record<ManualContextKey, string>);
   const [sendMode, setSendMode] = useState<"dry-run" | "actual">("dry-run");
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [contextOpen, setContextOpen] = useState(false);
+  const editorRef = useRef<HTMLDivElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
+  const lastRenderedBodyRef = useRef("");
 
   const selectedClassGroup = classGroups.find((classGroup) => classGroup.id === classGroupId) ?? null;
+  const selectedLesson = selectedClassGroup?.lessons?.find((lesson) => lesson.id === lessonId) ?? null;
   const selectedExam = exams.find((exam) => exam.id === examId) ?? null;
-  const effectiveClassName = selectedClassGroup?.name ?? manualClassName;
-  const examMap = useMemo(() => buildExamMap(selectedExam), [selectedExam]);
-  const variableCheck = useMemo(() => validateTemplateVariables(body), [body]);
+  const effectiveClassName = manualContext.className?.trim() || selectedClassGroup?.name || "";
+  const effectiveLessonName = manualContext.lessonName?.trim() || selectedClassGroup?.name || "";
+  const effectiveLessonRound = manualContext.lessonRound?.trim() || selectedLesson?.title || "";
+  const effectiveLessonDate = manualContext.lessonDate?.trim() || selectedLesson?.lessonDate || "";
+  const effectiveExamName = selectedExam?.title || manualContext.examName?.trim() || "";
+  const effectiveExamDate = selectedExam?.examDate || manualContext.examDate?.trim() || "";
+  const examMap = buildExamMap(selectedExam);
+  const variableCheck = validateTemplateVariables(body);
   const requiresExam = variableCheck.variables.some((name) => examVariableNames.has(name));
 
-  const filteredStudents = useMemo(() => students.filter((student) => {
+  const filteredStudents = students.filter((student) => {
     const result = examMap.byStudent.get(student.id);
     const searchable = `${student.name} ${student.phone} ${student.parentPhone} ${student.schoolName} ${student.grade} ${student.classGroupNames.join(" ")}`.toLowerCase();
     if (classGroupId !== "all" && !student.classGroupIds.includes(classGroupId)) return false;
@@ -72,14 +134,12 @@ export default function MessageComposer({ academyName, classGroups, students, ex
     if (quickFilter === "MANY_WRONG") return Boolean(result && result.wrongCount + result.blankCount >= 5);
     if (quickFilter === "REMEDIAL") return remedialReasons(result, examMap.average).length > 0;
     return true;
-  }), [classGroupId, examMap, quickFilter, search, selectedExam, students]);
+  });
 
-  const selectedStudents = useMemo(() => {
-    const selected = new Set(selectedStudentIds);
-    return students.filter((student) => selected.has(student.id));
-  }, [selectedStudentIds, students]);
+  const selected = new Set(selectedStudentIds);
+  const selectedStudents = students.filter((student) => selected.has(student.id));
 
-  const previewStudents = useMemo<MessageStudent[]>(() => selectedStudents.map((student) => ({
+  const previewStudents: MessageStudent[] = selectedStudents.map((student) => ({
     id: student.id,
     name: student.name,
     phone: student.phone,
@@ -88,13 +148,22 @@ export default function MessageComposer({ academyName, classGroups, students, ex
     schoolName: student.schoolName,
     grade: student.grade,
     templateData: examTemplateData(selectedExam, examMap.byStudent.get(student.id), examMap.average, examMap.rankByStudent.get(student.id), student),
-  })), [effectiveClassName, examMap, selectedExam, selectedStudents]);
+  }));
 
-  const context = useMemo<TemplateContext>(() => ({ className: effectiveClassName, lessonName, lessonRound, attendanceStatus, assignmentName, examName: selectedExam?.title ?? "", examDate: selectedExam?.examDate ?? "", reportLink, academyName }), [academyName, assignmentName, attendanceStatus, effectiveClassName, lessonName, lessonRound, reportLink, selectedExam]);
-  const preview = useMemo(() => buildMessageRecipients({ students: previewStudents, targetType, body, context, isMarketing, subject: title, unsubPhone: settings.unsubPhone }), [body, context, isMarketing, previewStudents, settings.unsubPhone, targetType, title]);
+  const context: TemplateContext = { ...manualContext, className: effectiveClassName, lessonName: effectiveLessonName, lessonRound: effectiveLessonRound, lessonDate: effectiveLessonDate, examName: effectiveExamName, examDate: effectiveExamDate, academyName };
+  const preview = buildMessageRecipients({ students: previewStudents, targetType, body, context, isMarketing, subject: title, unsubPhone: settings.unsubPhone });
   const previewRecipient = preview.recipients.find((recipient) => recipient.localId === previewRecipientId) ?? preview.recipients[0] ?? null;
-  const canRequestActual = canSendActual && settings.canSendActual && !settings.dryRun && preview.unknownVariables.length === 0 && preview.missingVariables.length === 0 && (!requiresExam || Boolean(selectedExam));
+  const canRequestActual = canSendActual && settings.canSendActual && !settings.dryRun && preview.unknownVariables.length === 0 && preview.missingVariables.length === 0;
   const allFilteredSelected = filteredStudents.length > 0 && filteredStudents.every((student) => selectedStudentIds.includes(student.id));
+  const filledManualCount = manualContextFields.filter(([key]) => Boolean(contextValue(key, manualContext, selectedClassGroup, selectedLesson, selectedExam))).length;
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    if (document.activeElement === editor && lastRenderedBodyRef.current !== "") return;
+    renderTokenEditor(editor, body);
+    lastRenderedBodyRef.current = body;
+  }, [body]);
 
   const selectTemplate = (id: string) => {
     setTemplateId(id);
@@ -105,6 +174,32 @@ export default function MessageComposer({ academyName, classGroups, students, ex
     setPreviewRecipientId("");
     setBody(template.body);
     setIsMarketing(Boolean(template.isMarketing));
+  };
+  const updateManualContext = (key: ManualContextKey, value: string) => {
+    setManualContext((current) => ({ ...current, [key]: value }));
+  };
+  const selectContextClass = (id: string) => {
+    setClassGroupId(id);
+    setLessonId("");
+    setExamId("");
+    setManualContext((current) => ({ ...current, className: "", lessonName: "", lessonRound: "", lessonDate: "", examName: "", examDate: "" }));
+  };
+  const selectContextLesson = (id: string) => {
+    setLessonId(id);
+    setManualContext((current) => ({ ...current, lessonRound: "", lessonDate: "" }));
+  };
+  const selectContextExam = (id: string) => {
+    setExamId(id);
+    const exam = exams.find((item) => item.id === id);
+    if (!exam) {
+      setManualContext((current) => ({ ...current, examName: "", examDate: "" }));
+      return;
+    }
+    if (exam.classGroupId) {
+      setClassGroupId(exam.classGroupId);
+      setLessonId("");
+    }
+    setManualContext((current) => ({ ...current, examName: "", examDate: "" }));
   };
   const toggleStudent = (studentId: string) => {
     setSelectedStudentIds((current) => current.includes(studentId) ? current.filter((id) => id !== studentId) : [...current, studentId]);
@@ -125,13 +220,31 @@ export default function MessageComposer({ academyName, classGroups, students, ex
     setPreviewRecipientId((current) => filteredIds.some((studentId) => current.startsWith(`${studentId}:`)) ? "" : current);
   };
   const insertVariable = (variable: string) => {
-    const insertion = `{{${variable}}}`;
-    const textarea = textareaRef.current;
-    if (!textarea) return setBody((current) => `${current}${insertion}`);
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    setBody((current) => `${current.slice(0, start)}${insertion}${current.slice(end)}`);
-    window.setTimeout(() => { textarea.focus(); textarea.selectionStart = start + insertion.length; textarea.selectionEnd = start + insertion.length; }, 0);
+    const editor = editorRef.current;
+    if (!editor) return setBody((current) => `${current}{{${variable}}}`);
+    editor.focus();
+    insertVariableToken(editor, variable);
+    const nextBody = serializeTokenEditor(editor);
+    lastRenderedBodyRef.current = nextBody;
+    setBody(nextBody);
+  };
+  const updateBodyFromEditor = () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const nextBody = serializeTokenEditor(editor);
+    lastRenderedBodyRef.current = nextBody;
+    setBody(nextBody);
+  };
+  const handleEditorKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    insertPlainTextIntoEditor("\n");
+    updateBodyFromEditor();
+  };
+  const handleEditorPaste = (event: ClipboardEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    insertPlainTextIntoEditor(event.clipboardData.getData("text/plain"));
+    updateBodyFromEditor();
   };
   const openConfirm = (mode: "dry-run" | "actual") => { setSendMode(mode); setConfirmOpen(true); };
 
@@ -150,8 +263,7 @@ export default function MessageComposer({ academyName, classGroups, students, ex
         <input type="hidden" name="sendMode" value={sendMode} />
         <input type="hidden" name="className" value={effectiveClassName} />
         <input type="hidden" name="examId" value={examId} />
-        <input type="hidden" name="examName" value={selectedExam?.title ?? ""} />
-        <input type="hidden" name="examDate" value={selectedExam?.examDate ?? ""} />
+        {manualContextFields.filter(([key]) => key !== "className").map(([key]) => <input key={key} type="hidden" name={key} value={contextValue(key, manualContext, selectedClassGroup, selectedLesson, selectedExam)} />)}
         <input type="hidden" name="isMarketing" value={isMarketing ? "true" : "false"} />
         <input type="hidden" name="unsubPhone" value={settings.unsubPhone ?? ""} />
 
@@ -163,7 +275,7 @@ export default function MessageComposer({ academyName, classGroups, students, ex
             <div style={mutedRight}>{previewRecipient ? `${previewRecipient.byteLength ?? 0} byte · ${previewRecipient.messageKind}` : `${messageByteLength(body)} byte`}</div>
           </div>
           {isMarketing && <div style={warn}>광고 문자는 수신동의 대상만 포함되며 무료 수신거부 번호가 필요합니다.</div>}
-          {requiresExam && !selectedExam && <div style={warn}>시험 변수를 사용 중입니다. 시험을 선택해주세요.</div>}
+          {requiresExam && !selectedExam && <div style={warn}>시험 결과 태그는 시험 선택 또는 직접 입력 태그 값이 필요합니다.</div>}
           {preview.unknownVariables.length > 0 && <div style={warn}>허용되지 않은 변수: {preview.unknownVariables.map((item) => `{{${item}}}`).join(", ")}</div>}
           {preview.missingVariables.length > 0 && <div style={warn}>{preview.missingVariables.length}명에게 값이 없는 변수가 있습니다.</div>}
           <MessagePreviewList preview={preview} onSelectRecipient={setPreviewRecipientId} selectedRecipientId={previewRecipient?.localId} />
@@ -177,25 +289,16 @@ export default function MessageComposer({ academyName, classGroups, students, ex
           </div>
           <div style={pillRow}>{messageTargetTypes.map((target) => <label key={target.value} style={{ ...pill, ...(targetType === target.value ? activePill : {}) }}><input type="radio" name="targetType" value={target.value} checked={targetType === target.value} onChange={() => { setTargetType(target.value); setPreviewRecipientId(""); }} />{target.label}</label>)}</div>
           <label style={checkLine}><input type="checkbox" checked={isMarketing} onChange={(event) => setIsMarketing(event.target.checked)} /> 광고 문자로 발송</label>
-          <textarea ref={textareaRef} name="body" value={body} onChange={(event) => setBody(event.target.value)} rows={11} style={textarea} aria-label="문자 본문" />
-          <div style={variableBox}>{variableGroups.map(([group, items]) => <div key={group} style={chipLine}><b>{group}</b>{items.map((item) => <button key={item} type="button" style={chip} onClick={() => insertVariable(item)}>{`{{${item}}}`}</button>)}</div>)}</div>
-          <div style={contextGrid}>
-            <input name="lessonName" value={lessonName} onChange={(event) => setLessonName(event.target.value)} placeholder="강의명" style={input} />
-            <input name="lessonRound" value={lessonRound} onChange={(event) => setLessonRound(event.target.value)} placeholder="차시명" style={input} />
-            <input name="attendanceStatus" value={attendanceStatus} onChange={(event) => setAttendanceStatus(event.target.value)} placeholder="출결 상태" style={input} />
-            <input name="assignmentName" value={assignmentName} onChange={(event) => setAssignmentName(event.target.value)} placeholder="과제명" style={input} />
-            <input name="reportLink" value={reportLink} onChange={(event) => setReportLink(event.target.value)} placeholder="리포트 링크" style={input} />
-          </div>
+          <input type="hidden" name="body" value={body} />
+          <div ref={editorRef} contentEditable suppressContentEditableWarning role="textbox" aria-label="문자 본문" style={tokenEditor} onInput={updateBodyFromEditor} onKeyDown={handleEditorKeyDown} onPaste={handleEditorPaste} />
+          <div style={variableBox}>{variableGroups.map(([group, items]) => <div key={group} style={chipLine}><b>{group}</b>{items.map((item) => <button key={item} type="button" style={chip} title={`{{${item}}}`} aria-label={`${variableLabels[item]} 태그 삽입`} onClick={() => insertVariable(item)}>{variableLabels[item]}</button>)}</div>)}</div>
+          <div style={contextBar}><button type="button" style={smallButton} onClick={() => setContextOpen(true)}>직접 입력 태그 값</button><span style={smallText}>{filledManualCount}개 값 준비됨</span></div>
           <div style={actions}><button type="button" style={secondaryButton} disabled={preview.recipients.length === 0} onClick={() => openConfirm("dry-run")}>테스트 실행</button><button type="button" style={primaryButton} disabled={preview.recipients.length === 0 || !canRequestActual} onClick={() => openConfirm("actual")}>{preview.recipients.length}명에게 문자 발송</button>{!canRequestActual && <span style={smallText}>설정, 변수, 누락 데이터를 확인해주세요.</span>}</div>
         </section>
 
         <section style={card} aria-label="발송 대상 선택">
           <div style={sectionHead}><h3 style={sectionTitle}>대상 선택</h3><button type="button" style={smallButton} onClick={toggleFilteredStudents}>{allFilteredSelected ? "필터 결과 해제" : "필터 결과 선택"}</button></div>
-          <div style={twoCols}>
-            <label style={field}><span>반 선택</span><select value={classGroupId} onChange={(event) => setClassGroupId(event.target.value)} style={input}><option value="all">전체 반</option>{classGroups.map((classGroup) => <option key={classGroup.id} value={classGroup.id}>{classGroup.name}</option>)}</select></label>
-            <label style={field}><span>시험 선택</span><select value={examId} onChange={(event) => setExamId(event.target.value)} style={input}><option value="">시험 선택 안 함</option>{exams.filter((exam) => classGroupId === "all" || !exam.classGroupId || exam.classGroupId === classGroupId).map((exam) => <option key={exam.id} value={exam.id}>{exam.title}{exam.examDate ? ` · ${exam.examDate}` : ""}</option>)}</select></label>
-          </div>
-          {!selectedClassGroup && <label style={field}><span>className 변수</span><input value={manualClassName} onChange={(event) => setManualClassName(event.target.value)} placeholder="예: 중2 수학 A반" style={input} /></label>}
+          <label style={field}><span>반 선택</span><select value={classGroupId} onChange={(event) => selectContextClass(event.target.value)} style={input}><option value="all">전체 반</option>{classGroups.map((classGroup) => <option key={classGroup.id} value={classGroup.id}>{classGroup.name}</option>)}</select></label>
           <label style={field}><span>학생 검색</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="이름, 전화번호, 반" style={input} /></label>
           <div style={pillRow}>{quickFilters.map(([value, label]) => <button key={value} type="button" style={{ ...filterButton, ...(quickFilter === value ? activeFilter : {}) }} onClick={() => setQuickFilter(value)}>{label}</button>)}</div>
           <div style={bulkRow}><button type="button" style={smallButton} onClick={() => addFilteredStudents("GUARDIAN")}>{filteredStudents.length}명 학부모 선택</button><button type="button" style={smallButton} onClick={() => addFilteredStudents("STUDENT")}>{filteredStudents.length}명 학생 선택</button><button type="button" style={smallButton} onClick={() => addFilteredStudents("BOTH")}>{filteredStudents.length}명 학생+학부모</button></div>
@@ -208,6 +311,7 @@ export default function MessageComposer({ academyName, classGroups, students, ex
         </section>
       </form>
 
+      {contextOpen && <div style={modalBackdrop} role="presentation"><div style={modal} role="dialog" aria-modal="true" aria-label="직접 입력 태그 값"><div style={sectionHead}><h3 style={modalTitle}>직접 입력 태그 값</h3><button type="button" style={ghostButton} onClick={() => setContextOpen(false)}>닫기</button></div><div style={contextGrid}><label style={field}><span>시험 선택</span><select value={examId} onChange={(event) => selectContextExam(event.target.value)} style={input}><option value="">시험 선택 안 함</option>{exams.filter((exam) => classGroupId === "all" || !exam.classGroupId || exam.classGroupId === classGroupId).map((exam) => <option key={exam.id} value={exam.id}>{exam.title}{exam.examDate ? ` · ${exam.examDate}` : ""}</option>)}</select></label><label style={field}><span>강의 선택</span><select value={classGroupId} onChange={(event) => selectContextClass(event.target.value)} style={input}><option value="all">선택 안 함</option>{classGroups.map((classGroup) => <option key={classGroup.id} value={classGroup.id}>{classGroup.name}</option>)}</select></label><label style={field}><span>차시 선택</span><select value={lessonId} onChange={(event) => selectContextLesson(event.target.value)} style={input} disabled={!selectedClassGroup}><option value="">차시 선택 안 함</option>{selectedClassGroup?.lessons?.map((lesson) => <option key={lesson.id} value={lesson.id}>{lesson.title}{lesson.lessonDate ? ` · ${lesson.lessonDate}` : ""}</option>)}</select></label></div><div style={contextGrid}>{manualContextFields.filter(([key]) => !["className", "lessonName", "lessonRound", "lessonDate", "examName", "examDate"].includes(key)).map(([key, label, placeholder]) => <label key={key} style={field}><span>{label}</span><input value={manualContext[key] ?? ""} onChange={(event) => updateManualContext(key, event.target.value)} placeholder={placeholder} style={input} /></label>)}</div><div style={modalActions}><button type="button" style={ghostButton} onClick={() => { setLessonId(""); setExamId(""); setManualContext({} as Record<ManualContextKey, string>); }}>비우기</button><button type="button" style={primaryButton} onClick={() => setContextOpen(false)}>적용</button></div></div></div>}
       {confirmOpen && <div style={modalBackdrop} role="presentation"><div style={modal} role="dialog" aria-modal="true" aria-label="문자 발송 확인"><h3 style={modalTitle}>{sendMode === "actual" ? "최종 발송 확인" : "테스트 실행 확인"}</h3><div style={modalStats}><Summary label="발송 대상" value={`${preview.recipients.length}명`} /><Summary label="학생" value={`${preview.recipients.filter((recipient) => recipient.recipientType === "STUDENT").length}명`} /><Summary label="학부모" value={`${preview.recipients.filter((recipient) => recipient.recipientType === "GUARDIAN").length}명`} /><Summary label="제외" value={`${preview.skipped.length}건`} /><Summary label="유형" value={preview.maxByteLength > 80 ? "LMS 포함" : "SMS"} /><Summary label="광고" value={isMarketing ? "예" : "아니오"} /></div><p style={modalCopy}>{sendMode === "actual" ? `${preview.recipients.length}명에게 문자를 발송합니다. 이 작업은 되돌릴 수 없습니다.` : "테스트 실행은 실제 발송 없이 로그와 검증 흐름을 확인합니다."}</p>{preview.missingVariables.length > 0 && <p style={modalWarn}>값이 없는 변수가 있어 실제 발송은 차단됩니다.</p>}<div style={modalPreview}>{previewRecipient?.messageText ?? body}</div><div style={modalActions}><button type="button" style={ghostButton} onClick={() => setConfirmOpen(false)}>닫기</button><button type="button" style={sendMode === "actual" ? primaryButton : secondaryButton} onClick={() => { setConfirmOpen(false); window.setTimeout(() => formRef.current?.requestSubmit(), 0); }}>{sendMode === "actual" ? `${preview.recipients.length}명에게 문자 발송` : "테스트 실행"}</button></div></div></div>}
     </section>
   );
@@ -247,6 +351,113 @@ function BadgeText({ children, tone = "info" }: { children: string; tone?: "info
 function Summary({ label, value }: { label: string; value: string }) { return <div style={stat}><span>{label}</span><b>{value}</b></div>; }
 export function categoryLabel(value: string) { return messageCategories.find((category) => category.value === value)?.label ?? value; }
 
+function contextValue(key: ManualContextKey, manualContext: Record<ManualContextKey, string>, selectedClassGroup: MessageClassGroupOption | null, selectedLesson: MessageClassLessonOption | null, selectedExam: MessageExamOption | null) {
+  if (key === "className") return manualContext.className?.trim() || selectedClassGroup?.name || "";
+  if (key === "lessonName") return manualContext.lessonName?.trim() || selectedClassGroup?.name || "";
+  if (key === "lessonRound") return manualContext.lessonRound?.trim() || selectedLesson?.title || "";
+  if (key === "lessonDate") return manualContext.lessonDate?.trim() || selectedLesson?.lessonDate || "";
+  if (key === "examName") return selectedExam?.title || manualContext.examName?.trim() || "";
+  if (key === "examDate") return selectedExam?.examDate || manualContext.examDate?.trim() || "";
+  return manualContext[key]?.trim() || "";
+}
+
+const tokenPattern = /\{\{\s*([a-zA-Z][a-zA-Z0-9_]*)\s*\}\}/g;
+
+function variableLabel(variable: string) {
+  return variableLabels[variable] ?? variable;
+}
+
+function renderTokenEditor(editor: HTMLDivElement, value: string) {
+  editor.replaceChildren();
+  let cursor = 0;
+  for (const match of value.matchAll(tokenPattern)) {
+    appendTextNodes(editor, value.slice(cursor, match.index));
+    editor.appendChild(createTokenElement(match[1] ?? ""));
+    cursor = (match.index ?? 0) + match[0].length;
+  }
+  appendTextNodes(editor, value.slice(cursor));
+}
+
+function appendTextNodes(parent: Node, text: string) {
+  const parts = text.split("\n");
+  parts.forEach((part, index) => {
+    if (index > 0) parent.appendChild(document.createElement("br"));
+    if (part) parent.appendChild(document.createTextNode(part));
+  });
+}
+
+function createTokenElement(variable: string) {
+  const token = document.createElement("span");
+  token.dataset.variable = variable;
+  token.contentEditable = "false";
+  token.textContent = variableLabel(variable);
+  token.title = `{{${variable}}}`;
+  token.style.display = "inline-flex";
+  token.style.alignItems = "center";
+  token.style.minHeight = "22px";
+  token.style.margin = "0 2px";
+  token.style.padding = "2px 7px";
+  token.style.borderRadius = "var(--asc-radius-md)";
+  token.style.background = "var(--asc-primary-soft)";
+  token.style.color = "var(--asc-primary)";
+  token.style.fontWeight = "900";
+  token.style.verticalAlign = "baseline";
+  return token;
+}
+
+function serializeTokenEditor(editor: HTMLDivElement) {
+  return Array.from(editor.childNodes).map(serializeTokenNode).join("").replace(/\u00a0/g, " ");
+}
+
+function serializeTokenNode(node: ChildNode): string {
+  if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
+  if (!(node instanceof HTMLElement)) return "";
+  const variable = node.dataset.variable;
+  if (variable) return `{{${variable}}}`;
+  if (node.tagName === "BR") return "\n";
+  return Array.from(node.childNodes).map(serializeTokenNode).join("");
+}
+
+function insertVariableToken(editor: HTMLDivElement, variable: string) {
+  const token = createTokenElement(variable);
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || !selectionInside(editor, selection)) {
+    editor.appendChild(token);
+    placeCaretAfter(token);
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  range.deleteContents();
+  range.insertNode(token);
+  placeCaretAfter(token);
+}
+
+function insertPlainTextIntoEditor(text: string) {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return;
+  const range = selection.getRangeAt(0);
+  const fragment = document.createDocumentFragment();
+  appendTextNodes(fragment, text);
+  const lastNode = fragment.lastChild;
+  range.deleteContents();
+  range.insertNode(fragment);
+  if (lastNode) placeCaretAfter(lastNode);
+}
+
+function selectionInside(editor: HTMLDivElement, selection: Selection) {
+  const node = selection.anchorNode;
+  return Boolean(node && editor.contains(node));
+}
+
+function placeCaretAfter(node: Node) {
+  const range = document.createRange();
+  range.setStartAfter(node);
+  range.collapse(true);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
 const panel: CSSProperties = { display: "grid", gap: 10 };
 const panelHead: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 };
 const panelTitle: CSSProperties = { margin: 0, fontSize: 18, fontWeight: 950 };
@@ -264,13 +475,15 @@ const twoCols: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2
 const field: CSSProperties = { display: "grid", gap: 5, color: "var(--asc-text-subtle)", fontSize: 12, fontWeight: 900 };
 const input: CSSProperties = { width: "100%", height: 36, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", padding: "0 10px", color: "var(--asc-text)", background: "var(--asc-bg-subtle)" };
 const textarea: CSSProperties = { ...input, height: "auto", minHeight: 190, resize: "vertical", padding: 10, lineHeight: 1.5 };
+const tokenEditor: CSSProperties = { ...textarea, overflowY: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word", outline: "none" };
 const pillRow: CSSProperties = { display: "flex", gap: 6, flexWrap: "wrap" };
 const pill: CSSProperties = { display: "inline-flex", alignItems: "center", gap: 6, borderWidth: 1, borderStyle: "solid", borderColor: "transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", padding: "7px 10px", fontWeight: 900, cursor: "pointer" };
 const activePill: CSSProperties = { borderColor: "var(--asc-primary)", background: "var(--asc-primary-soft)", color: "var(--asc-primary)" };
 const checkLine: CSSProperties = { display: "inline-flex", alignItems: "center", gap: 7, fontWeight: 900, color: "var(--asc-text-subtle)" };
 const variableBox: CSSProperties = { display: "grid", gap: 6 };
 const chipLine: CSSProperties = { display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center", fontSize: 12 };
-const chip: CSSProperties = { border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", padding: "5px 8px", fontSize: 12, fontWeight: 900, color: "var(--asc-text-subtle)" };
+const chip: CSSProperties = { border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", padding: "5px 8px", fontSize: 12, fontWeight: 900, color: "var(--asc-text-subtle)", cursor: "pointer", boxShadow: "inset 0 0 0 1px var(--asc-border-subtle)" };
+const contextBar: CSSProperties = { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" };
 const contextGrid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 6 };
 const actions: CSSProperties = { display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" };
 const secondaryButton: CSSProperties = { height: 38, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-primary-soft)", color: "var(--asc-primary)", padding: "0 14px", fontWeight: 950 };

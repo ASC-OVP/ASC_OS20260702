@@ -13,8 +13,9 @@ export default async function DashboardPageView() {
   const today = todayKoreaDate();
   const raw = await getDashboardData({ user, today });
   const data = buildDashboardViewData({ raw, user, today });
-  const urgentCount = data.inboxItems.filter((item) => item.severity === "critical").length;
-  const todayCount = data.inboxItems.filter((item) => item.dateScope === "today" || item.dueKey === data.today || item.dateKey === data.today).length;
+  const todayInboxItems = data.inboxItems.filter((item) => item.dateScope === "today" || item.dueKey === data.today || item.dateKey === data.today);
+  const urgentCount = todayInboxItems.filter((item) => item.severity === "critical").length;
+  const todayCount = todayInboxItems.length;
 
   return (
     <main style={pageShell}>

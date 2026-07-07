@@ -1,5 +1,6 @@
 import { CALENDAR_CONTENT_FILTERS, CALENDAR_DEFAULT_FILTERS } from "@/features/calendar/constants";
 import type { AcademyCalendarEvent, CalendarContentFilter, CalendarFilterValue } from "@/features/calendar/types";
+import { withJosa } from "@/lib/koreanParticles";
 
 export function defaultCalendarFilters(): CalendarFilterValue {
   return {
@@ -32,6 +33,7 @@ export function filterCalendarEvents(events: AcademyCalendarEvent[], filters: Ca
 }
 
 export function contentTypeForEvent(event: AcademyCalendarEvent): CalendarContentFilter {
+  if (event.source === "internal_task") return "internal_task";
   if (event.source === "assistant_work_shift") return "assistant_work_shift";
   if (event.source === "calendar_private_memo") return "private_memo";
   return "lesson_schedule";
@@ -55,8 +57,9 @@ export function calendarEmptyState(filters: CalendarFilterValue) {
 
   if (filters.contentTypes.length === 1) {
     const meta = CALENDAR_CONTENT_FILTERS.find((item) => item.id === filters.contentTypes[0]);
+    const label = meta?.label ?? "선택한 유형";
     return {
-      title: `${meta?.label ?? "선택한 유형"}이 없습니다.`,
+      title: `${withJosa(label, "이/가")} 없습니다.`,
       description: "선택한 기간이나 직원 화면을 바꾸면 다른 결과를 볼 수 있습니다.",
     };
   }

@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 import type { CSSProperties } from "react";
 import { uploadOmrAction } from "@/features/omr/actions/uploadActions";
 import { formatOmrBytes, OMR_MAX_BATCH_BYTES, OMR_MAX_BATCH_LABEL, OMR_MAX_FILE_BYTES, OMR_MAX_FILE_LABEL } from "@/features/omr/lib/omrUploadLimits";
+import { withJosa } from "@/lib/koreanParticles";
 
 type ExamOption = {
   id: string;
@@ -70,7 +71,7 @@ export default function OmrMultiUploadForm({ exams, selectedExamId }: Props) {
               <small style={file.size > OMR_MAX_FILE_BYTES ? dangerText : undefined}>{formatOmrBytes(file.size)}</small>
             </div>
           ))}
-          {hasOversizedFile && <p style={dangerText}>{OMR_MAX_FILE_LABEL}를 넘는 파일은 건너뛰고, 가능한 파일만 업로드됩니다.</p>}
+          {hasOversizedFile && <p style={dangerText}>{withJosa(OMR_MAX_FILE_LABEL, "을/를")} 넘는 파일은 건너뛰고, 가능한 파일만 업로드됩니다.</p>}
           {isBatchTooLarge && <p style={dangerText}>선택한 파일 총 용량이 너무 큽니다. 여러 번 나눠서 업로드해주세요.</p>}
         </div>
       )}

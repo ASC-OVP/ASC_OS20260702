@@ -16,7 +16,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     ? await prisma.personalStickyMemo.findMany({
         where: { academyId: user.academyId, userId: user.id },
         orderBy: { updatedAt: "desc" },
-        take: 20,
+        take: 80,
         select: { id: true, content: true, color: true, updatedAt: true },
       })
     : [];
@@ -53,4 +53,3 @@ function formatShortDateTime(date: Date) {
     minute: "2-digit",
   }).format(date);
 }
-

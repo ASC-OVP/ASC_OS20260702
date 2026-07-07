@@ -9,10 +9,12 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getOmrTemplate } from "@/features/omr/lib/omrTemplates";
 import { enumValue, normalizeAnswer, optionalText, safeReturnTo, scoreValue, text } from "@/features/omr/lib/omrForm";
+import { canManageExamForUser } from "@/features/omr/lib/omrPermissions";
 import { ANSWER_STATUSES } from "@/features/omr/lib/omrStatus";
 
 export async function saveOmrCorrectionsAction(formData: FormData) {
   const user = await requireUser();
+  if (!(await canManageExamForUser(user))) return;
   const uploadId = text(formData, "uploadId");
   const returnTo = safeReturnTo(text(formData, "returnTo"));
   if (!uploadId) return;

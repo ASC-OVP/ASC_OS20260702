@@ -12,14 +12,11 @@ import {
   buildContextLabel,
   clipDashboardText,
   formatDateTime,
-  formatDueDate,
   formatYmd,
   isPositiveAttendanceStatus,
   messageStatusText,
   omrStatusText,
   studentStatusText,
-  taskPriorityText,
-  taskStatusText,
 } from "@/features/dashboard/lib/dashboardFormatters";
 import type {
   CommunicationWidgetData,
@@ -37,9 +34,24 @@ import type {
 } from "@/features/dashboard/types";
 import { effectiveClassStatus, formatClassSchedule, parseClassDaysOfWeek } from "@/lib/classGroups";
 import { roleText } from "@/lib/auth";
+import { withJosa } from "@/lib/koreanParticles";
 
 export function percentMetric(value: number, total: number) {
   return total > 0 ? Math.round((value / total) * 100) : 0;
+}
+
+function normalizedStatus(value: string | null | undefined) {
+  return String(value ?? "").trim().toUpperCase();
+}
+
+function isCompletedAssignmentStatus(status: string | null | undefined) {
+  const value = normalizedStatus(status);
+  return Boolean(value) && !["UNCHECKED", "MISSING", "NONE", "NO", "N", "X", "미체크", "미확인", "미제출"].includes(value);
+}
+
+function isIncompleteAssignmentStatus(status: string | null | undefined) {
+  const value = normalizedStatus(status);
+  return ["UNCHECKED", "MISSING", "NONE", "NO", "N", "X", "미체크", "미확인", "미제출"].includes(value);
 }
 
 export function buildDashboardViewData({
@@ -77,17 +89,18 @@ export function buildDashboardViewData({
     }
   }
 
+  for (const record of raw.todayAttendance) todayStudentIds.add(record.studentId);
+  for (const record of raw.todayAssignments) todayStudentIds.add(record.studentId);
+
   const todayClassAttendance = raw.todayAttendance.filter((record) => todayStudentIds.has(record.studentId));
   const todayClassAssignments = raw.todayAssignments.filter((record) => todayStudentIds.has(record.studentId));
   const issueAttendance = todayClassAttendance.filter((record) => !isPositiveAttendanceStatus(record.status));
-  const assignmentIssues = todayClassAssignments.filter((record) => record.status === "PARTIAL" || record.status === "MISSING");
+  const assignmentIssues = todayClassAssignments.filter((record) => isIncompleteAssignmentStatus(record.status));
 
   const todayTargetStudentCount = todayStudentIds.size;
   const attendanceChecked = todayClassAttendance.length;
   const attendanceUnchecked = Math.max(todayTargetStudentCount - attendanceChecked, 0);
-  const assignmentChecked = todayClassAssignments.length;
-  const assignmentUnchecked = Math.max(todayTargetStudentCount - assignmentChecked, 0);
-  const assignmentDone = todayClassAssignments.filter((record) => record.status === "DONE").length;
+  const assignmentDone = todayClassAssignments.filter((record) => isCompletedAssignmentStatus(record.status)).length;
 
   const todayClassOperations = buildTodayClasses({
     raw,
@@ -95,7 +108,6 @@ export function buildDashboardViewData({
     todayClassIds,
   });
 
-  const hiddenSignalIds = new Set(raw.hiddenSignalIds);
   const inboxItems = sortInboxItems([
     ...buildTaskSignals(raw, user, today),
     ...buildAttendanceSignals({ raw, user, today, todayClasses, todayStudentIds, classNameByStudentId, classIdByStudentId }),
@@ -103,7 +115,7 @@ export function buildDashboardViewData({
     ...buildStudentSignals({ raw, user, classNameByStudentId, classIdByStudentId }),
     ...buildMessageSignals(raw, user),
     ...buildOmrSignals(raw, user),
-  ].filter((item) => !hiddenSignalIds.has(item.id))).slice(0, DASHBOARD_INBOX_LIMIT);
+  ]).slice(0, DASHBOARD_INBOX_LIMIT);
 
   const managementStudents = buildManagementStudents({
     raw,
@@ -112,11 +124,9 @@ export function buildDashboardViewData({
     classNameByStudentId,
   });
 
-  const communication = buildCommunicationWidget(raw, hiddenSignalIds);
-  const omrScore = buildOmrWidget(raw, hiddenSignalIds);
+  const communication = buildCommunicationWidget(raw);
+  const omrScore = buildOmrWidget(raw);
   const recentActivities = buildRecentActivities(raw);
-  const urgentCount = inboxItems.filter((item) => item.severity === "critical").length;
-  const warningCount = inboxItems.filter((item) => item.severity === "warning").length;
 
   return {
     academyName: user.academy.name,
@@ -128,18 +138,11 @@ export function buildDashboardViewData({
     summaryCards: buildSummaryCards({
       raw,
       today,
-      todayClassCount: todayClassOperations.length,
       attendanceChecked,
       attendanceTarget: todayTargetStudentCount,
       attendanceUnchecked,
-      assignmentChecked,
       assignmentTarget: todayTargetStudentCount,
       assignmentDone,
-      assignmentUnchecked,
-      urgentCount,
-      warningCount,
-      managementCount: managementStudents.length,
-      communicationIssueCount: communication.issueCount,
       omrIssueCount: omrScore.issueCount,
     }),
     inboxItems,
@@ -157,49 +160,71 @@ export function buildDashboardViewData({
 }
 
 function buildTaskSignals(raw: DashboardRawData, user: DashboardQueryUser, today: string): OperationsInboxItem[] {
-  return raw.openTasks.map((task) => {
-    const severity = task.priority === "URGENT" || task.status === "OVERDUE" ? "critical" : task.priority === "HIGH" ? "warning" : "routine";
-    const targetLabel = task.student?.name ?? task.classGroup?.name ?? "일반 업무";
-    const contextLabel = buildContextLabel([
-      task.student?.schoolName,
-      task.student?.grade,
-      task.classGroup?.name,
-      taskPriorityText[task.priority] ?? task.priority,
-    ]);
-    const href = `/tasks/${task.id}`;
-    const actions = compactActions([
-      { label: "업무 보기", href, tone: "primary" },
-      task.student ? { label: "학생 보기", href: `/students/${task.student.id}`, tone: "secondary" } : null,
-      task.classGroup ? { label: "반 보기", href: `/classes/${task.classGroup.id}`, tone: "secondary" } : null,
-    ]);
+  const taskByOwner = new Map<string, { id: string; name: string; tasks: DashboardRawData["openTasks"] }>();
+  const adminView = user.role === "ADMIN" || user.role === "MANAGER";
+
+  for (const task of raw.openTasks) {
+    if (!isTaskDueForTodayQueue(task, today)) continue;
+    const assignees = taskAssignees(task);
+    const owners = adminView ? assignees : assignees.filter((assignee) => assignee.id === user.id);
+    for (const assignee of owners) {
+      let bucket = taskByOwner.get(assignee.id);
+      if (!bucket) {
+        bucket = { id: assignee.id, name: assignee.name, tasks: [] };
+        taskByOwner.set(assignee.id, bucket);
+      }
+      bucket.tasks.push(task);
+    }
+  }
+
+  return [...taskByOwner.values()].map((bucket) => {
+    const urgentCount = bucket.tasks.filter((task) => task.priority === "URGENT" || task.status === "OVERDUE").length;
+    const highCount = bucket.tasks.filter((task) => task.priority === "HIGH").length;
+    const overdueCount = bucket.tasks.filter((task) => task.status === "OVERDUE" || (task.dueDate && toYmd(task.dueDate) < today)).length;
+    const firstTask = bucket.tasks[0];
+    const href = adminView ? `/tasks?assignee=${bucket.id}` : "/tasks";
+    const severity: DashboardSignalSeverity = urgentCount > 0 || overdueCount > 0 ? "critical" : "warning";
 
     return {
-      id: `task:${task.id}`,
+      id: `task-summary:${bucket.id}:${today}`,
       type: "task",
       severity,
-      title: task.title,
-      targetLabel,
-      contextLabel,
-      reason: `${taskStatusText[task.status] ?? task.status} 상태의 미완료 업무입니다.`,
-      statusLabel: taskStatusText[task.status] ?? task.status,
-      ownerLabel: task.assignee.name,
-      ownerId: task.assignee.id,
-      classGroupId: task.classGroup?.id,
-      className: task.classGroup?.name,
-      studentId: task.student?.id,
-      timeLabel: formatDueDate(task.dueDate),
-      dueKey: task.dueDate ? toYmd(task.dueDate) : undefined,
-      dateScope: task.dueDate && toYmd(task.dueDate) === today ? "today" : "open",
-      isMine: task.assignee.id === user.id || task.student?.teacherId === user.id || task.student?.assistantId === user.id || task.classGroup?.teacherId === user.id || task.classGroup?.assistantId === user.id,
+      title: adminView ? `${withJosa(bucket.name, "이/가")} 오늘의 업무를 완료하지 못했습니다.` : "오늘의 업무를 완료하지 못했습니다.",
+      targetLabel: `${bucket.tasks.length}건 미완료`,
+      contextLabel: buildContextLabel([overdueCount > 0 ? `기한 초과 ${overdueCount}건` : null, urgentCount > 0 ? `긴급 ${urgentCount}건` : null, highCount > 0 ? `높음 ${highCount}건` : null]),
+      reason: bucket.tasks.length > 1 ? "미완료 업무가 여러 건 있어 요약으로 표시합니다." : `${firstTask.title} 업무가 아직 완료되지 않았습니다.`,
+      statusLabel: "미완료",
+      ownerLabel: bucket.name,
+      ownerId: bucket.id,
+      classGroupId: firstTask.classGroup?.id,
+      className: firstTask.classGroup?.name,
+      studentId: firstTask.student?.id,
+      timeLabel: overdueCount > 0 ? "기한 초과 포함" : `${formatYmd(today)} 기준`,
+      dueKey: today,
+      dateScope: "today",
+      isMine: bucket.id === user.id,
       href,
-      actions,
+      actions: [{ label: "업무 확인", href, tone: "primary" }],
       recentRecords: [
-        { id: `${task.id}:status`, label: "상태", value: taskStatusText[task.status] ?? task.status },
-        { id: `${task.id}:priority`, label: "우선순위", value: taskPriorityText[task.priority] ?? task.priority },
+        { id: `${bucket.id}:count`, label: "미완료", value: `${bucket.tasks.length}건` },
+        { id: `${bucket.id}:urgent`, label: "긴급/초과", value: `${urgentCount + overdueCount}건` },
       ],
-      searchText: searchText([task.title, targetLabel, contextLabel, task.assignee.name, task.description]),
+      searchText: searchText([bucket.name, ...bucket.tasks.map((task) => task.title), ...bucket.tasks.map((task) => task.description)]),
     };
   });
+}
+
+function taskAssignees(task: DashboardRawData["openTasks"][number]) {
+  const assignees = task.assignees.length > 0
+    ? task.assignees.map((assignment) => assignment.assignee)
+    : [task.assignee];
+  return [...new Map(assignees.map((assignee) => [assignee.id, assignee])).values()];
+}
+
+function isTaskDueForTodayQueue(task: DashboardRawData["openTasks"][number], today: string) {
+  if (task.dueDate && toYmd(task.dueDate) === today) return true;
+  if (task.scheduledDate && task.scheduledDate === today) return true;
+  return false;
 }
 
 function buildAttendanceSignals({
@@ -227,6 +252,7 @@ function buildAttendanceSignals({
     const checked = studentIds.filter((studentId) => checkedIds.has(studentId)).length;
     const missing = Math.max(studentIds.length - checked, 0);
     if (missing <= 0) continue;
+    const href = studentQuickHref(today, "attendance", classGroup);
 
     items.push({
       id: `attendance-class:${classGroup.id}`,
@@ -245,9 +271,9 @@ function buildAttendanceSignals({
       dateKey: today,
       dateScope: "today",
       isMine: isClassMine(classGroup, user.id),
-      href: `/students?classGroupId=${classGroup.id}&date=${today}&tab=attendance`,
+      href,
       actions: [
-        { label: "출석 체크", href: `/students?classGroupId=${classGroup.id}&date=${today}&tab=attendance`, tone: "primary" },
+        { label: "출석 체크", href, tone: "primary" },
         { label: "반 보기", href: `/classes/${classGroup.id}`, tone: "secondary" },
       ],
       recentRecords: [
@@ -272,7 +298,7 @@ function buildAttendanceSignals({
       title: `${statusLabel} 학생 확인`,
       targetLabel: record.student.name,
       contextLabel: buildContextLabel([record.student.schoolName, record.student.grade, className]),
-      reason: `오늘 출석 상태가 ${statusLabel}으로 기록되었습니다.`,
+      reason: `오늘 출석 상태가 ${withJosa(statusLabel, "으로/로")} 기록되었습니다.`,
       statusLabel,
       ownerLabel: "담당 확인 필요",
       classGroupId,
@@ -316,7 +342,7 @@ function buildAssignmentSignals({
   classNameByStudentId: Map<string, string>;
   classIdByStudentId: Map<string, string>;
 }): OperationsInboxItem[] {
-  const checkedIds = new Set(raw.todayAssignments.map((record) => record.studentId));
+  const checkedIds = new Set(raw.todayAssignments.filter((record) => isCompletedAssignmentStatus(record.status)).map((record) => record.studentId));
   const items: OperationsInboxItem[] = [];
 
   for (const classGroup of todayClasses) {
@@ -324,6 +350,7 @@ function buildAssignmentSignals({
     const checked = studentIds.filter((studentId) => checkedIds.has(studentId)).length;
     const missing = Math.max(studentIds.length - checked, 0);
     if (missing <= 0) continue;
+    const href = studentQuickHref(today, "assignment", classGroup);
 
     items.push({
       id: `assignment-class:${classGroup.id}`,
@@ -342,9 +369,9 @@ function buildAssignmentSignals({
       dateKey: today,
       dateScope: "today",
       isMine: isClassMine(classGroup, user.id),
-      href: `/students?classGroupId=${classGroup.id}&date=${today}&tab=assignment`,
+      href,
       actions: [
-        { label: "과제 체크", href: `/students?classGroupId=${classGroup.id}&date=${today}&tab=assignment`, tone: "primary" },
+        { label: "과제 체크", href, tone: "primary" },
         { label: "반 보기", href: `/classes/${classGroup.id}`, tone: "secondary" },
       ],
       recentRecords: [
@@ -356,7 +383,7 @@ function buildAssignmentSignals({
   }
 
   for (const record of raw.todayAssignments) {
-    if (!todayStudentIds.has(record.studentId) || (record.status !== "PARTIAL" && record.status !== "MISSING")) continue;
+    if (!todayStudentIds.has(record.studentId) || !isIncompleteAssignmentStatus(record.status)) continue;
     const className = classNameByStudentId.get(record.studentId) ?? "오늘 수업";
     const classGroupId = classIdByStudentId.get(record.studentId);
     const statusLabel = assignmentText[record.status] ?? record.status;
@@ -364,7 +391,7 @@ function buildAssignmentSignals({
     items.push({
       id: `assignment:${record.id}`,
       type: "assignment",
-      severity: record.status === "MISSING" ? "critical" : "warning",
+      severity: isIncompleteAssignmentStatus(record.status) ? "critical" : "warning",
       title: "과제 제출 확인 필요",
       targetLabel: record.student.name,
       contextLabel: buildContextLabel([record.student.schoolName, record.student.grade, className]),
@@ -435,7 +462,7 @@ function buildStudentSignals({
       href: `/students/${student.id}`,
       actions: [
         { label: "학생 보기", href: `/students/${student.id}`, tone: "primary" },
-        { label: "메모 추가", href: `/memos/new?studentId=${student.id}`, tone: "secondary" },
+        { label: "메모 확인", href: `/students/${student.id}?tab=memos`, tone: "secondary" },
         { label: "업무 생성", href: `/tasks/new?studentId=${student.id}`, tone: "secondary" },
       ],
       recentRecords: [
@@ -453,6 +480,7 @@ function buildMessageSignals(raw: DashboardRawData, user: DashboardQueryUser): O
     const title = failed ? "문자 발송 실패 확인" : "문자 발송 상태 확인";
     const targetLabel = recipient.student?.name ?? recipient.receiverName;
     const statusLabel = messageStatusText(recipient.status);
+    const dateKey = toYmd(recipient.createdAt);
 
     return {
       id: `message:${recipient.id}`,
@@ -466,6 +494,7 @@ function buildMessageSignals(raw: DashboardRawData, user: DashboardQueryUser): O
       ownerLabel: "문자 담당",
       studentId: recipient.studentId ?? undefined,
       timeLabel: formatDateTime(recipient.createdAt),
+      dateKey,
       dateScope: "recent",
       isMine: recipient.student?.teacherId === user.id || recipient.student?.assistantId === user.id,
       href: "/messages",
@@ -491,6 +520,7 @@ function buildOmrSignals(raw: DashboardRawData, user: DashboardQueryUser): Opera
     const statusLabel = failed ? "실패" : needsMatch ? omrStatusText(upload.matchStatus) : reviewAnswerCount + reviewResultCount > 0 ? "검수 필요" : omrStatusText(upload.gradingStatus);
     const targetLabel = upload.student?.name ?? (upload.phoneLast8 ? `전화번호 ${upload.phoneLast8}` : upload.fileName);
     const classGroup = upload.exam?.classGroup;
+    const dateKey = toYmd(upload.updatedAt);
 
     return {
       id: `omr:${upload.id}`,
@@ -510,6 +540,7 @@ function buildOmrSignals(raw: DashboardRawData, user: DashboardQueryUser): Opera
       className: classGroup?.name,
       studentId: upload.studentId ?? undefined,
       timeLabel: formatDateTime(upload.updatedAt),
+      dateKey,
       dateScope: "recent",
       isMine: upload.student?.teacherId === user.id || upload.student?.assistantId === user.id || classGroup?.teacherId === user.id || classGroup?.assistantId === user.id,
       href: "/omr",
@@ -541,9 +572,9 @@ function buildTodayClasses({
     .map((classGroup) => {
       const studentIds = classGroup.studentClasses.map((membership) => membership.studentId);
       const attendanceChecked = raw.todayAttendance.filter((record) => studentIds.includes(record.studentId)).length;
-      const assignmentChecked = raw.todayAssignments.filter((record) => studentIds.includes(record.studentId)).length;
+      const assignmentChecked = raw.todayAssignments.filter((record) => studentIds.includes(record.studentId) && isCompletedAssignmentStatus(record.status)).length;
       const attendanceIssues = raw.todayAttendance.filter((record) => studentIds.includes(record.studentId) && !isPositiveAttendanceStatus(record.status)).length;
-      const assignmentIssues = raw.todayAssignments.filter((record) => studentIds.includes(record.studentId) && (record.status === "PARTIAL" || record.status === "MISSING")).length;
+      const assignmentIssues = raw.todayAssignments.filter((record) => studentIds.includes(record.studentId) && isIncompleteAssignmentStatus(record.status)).length;
       const missingChecks = Math.max(studentIds.length - attendanceChecked, 0) + Math.max(studentIds.length - assignmentChecked, 0);
       const issueCount = attendanceIssues + assignmentIssues + missingChecks;
       const severity: DashboardSignalSeverity = issueCount > 0 ? "warning" : "success";
@@ -635,9 +666,8 @@ function buildManagementStudents({
     .slice(0, DASHBOARD_WIDGET_LIMIT);
 }
 
-function buildCommunicationWidget(raw: DashboardRawData, hiddenSignalIds: Set<string>): CommunicationWidgetData {
+function buildCommunicationWidget(raw: DashboardRawData): CommunicationWidgetData {
   const items = raw.messageRecipients
-    .filter((recipient) => !hiddenSignalIds.has(`message:${recipient.id}`))
     .map((recipient) => ({
       id: recipient.id,
       title: recipient.student?.name ?? recipient.receiverName,
@@ -649,8 +679,8 @@ function buildCommunicationWidget(raw: DashboardRawData, hiddenSignalIds: Set<st
   return { issueCount: items.length, items: items.slice(0, DASHBOARD_WIDGET_LIMIT) };
 }
 
-function buildOmrWidget(raw: DashboardRawData, hiddenSignalIds: Set<string>): OmrScoreWidgetData {
-  const items = raw.omrUploads.filter((upload) => !hiddenSignalIds.has(`omr:${upload.id}`)).map((upload) => {
+function buildOmrWidget(raw: DashboardRawData): OmrScoreWidgetData {
+  const items = raw.omrUploads.map((upload) => {
     const reviewNeeded = upload.recognizedAnswers.filter((answer) => answer.status === "REVIEW_NEEDED" || answer.status === "MULTIPLE").length + upload.results.reduce((sum, result) => sum + result.reviewNeededCount, 0);
     const failed = upload.recognizeStatus === "FAILED" || upload.gradingStatus === "FAILED";
     return {
@@ -715,85 +745,235 @@ function buildRecentActivities(raw: DashboardRawData): RecentActivityItem[] {
 function buildSummaryCards({
   raw,
   today,
-  todayClassCount,
   attendanceChecked,
   attendanceTarget,
   attendanceUnchecked,
-  assignmentChecked,
   assignmentTarget,
   assignmentDone,
-  assignmentUnchecked,
-  urgentCount,
-  warningCount,
-  managementCount,
-  communicationIssueCount,
   omrIssueCount,
 }: {
   raw: DashboardRawData;
   today: string;
-  todayClassCount: number;
   attendanceChecked: number;
   attendanceTarget: number;
   attendanceUnchecked: number;
-  assignmentChecked: number;
   assignmentTarget: number;
   assignmentDone: number;
-  assignmentUnchecked: number;
-  urgentCount: number;
-  warningCount: number;
-  managementCount: number;
-  communicationIssueCount: number;
   omrIssueCount: number;
 }): DashboardSummaryCard[] {
+  const assignmentMissing = Math.max(assignmentTarget - assignmentDone, 0);
+  const todayExamSummary = buildTodayExamSummary(raw, today);
+  const todayTaskSummary = buildTodayTaskSummary(raw);
+  const quickClassGroup = firstTodayClassGroup(raw, today);
+
   return [
     {
-      id: "todayClasses",
-      label: "오늘 수업",
-      value: `${todayClassCount}개`,
-      note: `출석 ${attendanceChecked}/${attendanceTarget} · 과제 ${assignmentChecked}/${assignmentTarget}`,
-      href: `/students?date=${today}`,
-      severity: attendanceUnchecked + assignmentUnchecked > 0 ? "warning" : "success",
+      id: "todayAttendance",
+      label: "오늘의 출석",
+      value: `${attendanceTarget}명`,
+      note: `출석 처리 ${attendanceChecked}명 · 미체크 ${attendanceUnchecked}명`,
+      detail: `오늘 출석 처리 대상 ${attendanceTarget}명`,
+      href: studentQuickHref(today, "attendance", quickClassGroup),
+      severity: attendanceUnchecked > 0 ? "warning" : "success",
+      metrics: [
+        { label: "출석 처리", value: `${attendanceChecked}명` },
+        { label: "미체크", value: `${attendanceUnchecked}명` },
+      ],
+      progress: {
+        label: "출석 진행률",
+        value: attendanceChecked,
+        total: attendanceTarget,
+        tone: "green",
+      },
     },
     {
-      id: "urgent",
-      label: "긴급 신호",
-      value: `${urgentCount}개`,
-      note: `주의 ${warningCount}개 · 오늘 먼저 확인`,
-      severity: urgentCount > 0 ? "critical" : warningCount > 0 ? "warning" : "success",
+      id: "todayAssignments",
+      label: "오늘의 과제",
+      value: `${assignmentTarget}명`,
+      note: `제출 ${assignmentDone}명 · 미제출 ${assignmentMissing}명`,
+      detail: `오늘 과제 제출 대상 ${assignmentTarget}명`,
+      href: studentQuickHref(today, "assignment", quickClassGroup),
+      severity: assignmentMissing > 0 ? "warning" : "success",
+      metrics: [
+        { label: "제출", value: `${assignmentDone}명` },
+        { label: "미제출", value: `${assignmentMissing}명` },
+      ],
+      progress: {
+        label: "과제 제출률",
+        value: assignmentDone,
+        total: assignmentTarget,
+        tone: "blue",
+      },
     },
     {
-      id: "attentionStudents",
-      label: "관리 필요 학생",
-      value: `${managementCount}명`,
-      note: `주의 ${raw.counts.watchStudents}명 · 휴원 ${raw.counts.pausedStudents}명`,
-      href: "/students?sort=name",
-      severity: managementCount > 0 ? "warning" : "success",
-    },
-    {
-      id: "messages",
-      label: "미처리 메시지",
-      value: `${communicationIssueCount}건`,
-      note: communicationIssueCount > 0 ? "실패/대기 수신자 확인" : "실패 메시지 없음",
-      href: "/messages",
-      severity: communicationIssueCount > 0 ? "critical" : "success",
-    },
-    {
-      id: "paymentMaterials",
-      label: "미납/교재",
-      value: "데이터 연결 예정",
-      note: "결제·교재 모델 추가 후 자동 표시됩니다.",
-      unavailable: true,
-      severity: "routine",
+      id: "todayTasks",
+      label: "오늘의 업무 처리",
+      value: `${todayTaskSummary.totalPeople}명`,
+      note: `완료 ${todayTaskSummary.completedPeople}명 · 미완료 ${todayTaskSummary.incompletePeople}명`,
+      detail: todayTaskSummary.detail,
+      href: "/tasks",
+      severity: todayTaskSummary.incompletePeople > 0 ? "warning" : "success",
+      metrics: [
+        { label: "담당자", value: `${todayTaskSummary.totalPeople}명` },
+        { label: "완료", value: `${todayTaskSummary.completedPeople}명` },
+        { label: "미완료", value: `${todayTaskSummary.incompletePeople}명` },
+      ],
+      progress: {
+        label: "업무 완료율",
+        value: todayTaskSummary.completedPeople,
+        total: todayTaskSummary.totalPeople,
+        tone: "navy",
+      },
     },
     {
       id: "omr",
       label: "OMR/성적 검토",
-      value: `${omrIssueCount}건`,
-      note: omrIssueCount > 0 ? "인식/채점 검수 필요" : `완료 과제 ${assignmentDone}명`,
+      value: `${todayExamSummary.examCount}개`,
+      note: `작성 ${todayExamSummary.completed}명 · 미작성 ${todayExamSummary.missing}명`,
+      detail: todayExamSummary.detail,
       href: "/omr",
-      severity: omrIssueCount > 0 ? "warning" : "success",
+      severity: omrIssueCount > 0 || todayExamSummary.missing > 0 ? "warning" : "success",
+      metrics: [
+        { label: "오늘 테스트", value: `${todayExamSummary.examCount}개` },
+        { label: "작성", value: `${todayExamSummary.completed}명` },
+        { label: "미작성", value: `${todayExamSummary.missing}명` },
+      ],
+      progress: {
+        label: "검토 진행률",
+        value: todayExamSummary.completed,
+        total: todayExamSummary.target,
+        tone: "purple",
+      },
     },
   ];
+}
+
+function firstTodayClassGroup(raw: DashboardRawData, today: string) {
+  return raw.classGroups.find((classGroup) => isClassOnDate(classGroup, today)) ?? null;
+}
+
+function studentQuickHref(today: string, mode: "attendance" | "assignment", classGroup?: DashboardRawData["classGroups"][number] | null) {
+  const params = new URLSearchParams({
+    date: today,
+    tab: mode,
+    quick: mode,
+  });
+  if (classGroup) {
+    params.set("classGroupId", classGroup.id);
+    const lesson = todayLessonForClassGroup(classGroup, today);
+    if (lesson?.id) params.set("quickLessonId", lesson.id);
+    if (lesson?.position) params.set("quickLessonPosition", String(lesson.position));
+  }
+  return `/students?${params.toString()}`;
+}
+
+function todayLessonForClassGroup(classGroup: DashboardRawData["classGroups"][number], today: string) {
+  return classGroup.lessons.find((lesson) => lesson.lessonDate === today) ?? null;
+}
+
+function buildTodayTaskSummary(raw: DashboardRawData) {
+  const rows = new Map<string, { name: string; total: number; done: number }>();
+
+  for (const task of raw.todayTasks) {
+    const assignees = task.assignees.length > 0
+      ? task.assignees.map((assignment) => assignment.assignee)
+      : [task.assignee];
+    for (const assignee of assignees) {
+      const row = rows.get(assignee.id) ?? { name: assignee.name, total: 0, done: 0 };
+      row.total += 1;
+      if (task.status === "DONE") row.done += 1;
+      rows.set(assignee.id, row);
+    }
+  }
+
+  const people = [...rows.values()];
+  const completedPeople = people.filter((row) => row.total > 0 && row.done === row.total).length;
+  const incompletePeople = people.filter((row) => row.done < row.total).length;
+  const incompleteNames = people.filter((row) => row.done < row.total).map((row) => row.name).slice(0, 2);
+  const detail = people.length === 0
+    ? "오늘 처리할 업무 없음"
+    : incompletePeople === 0
+      ? "담당자 전원 업무 완료"
+      : `${incompleteNames.join(", ")}${incompletePeople > incompleteNames.length ? ` 외 ${incompletePeople - incompleteNames.length}명` : ""} 미완료`;
+
+  return {
+    totalPeople: people.length,
+    completedPeople,
+    incompletePeople,
+    detail,
+  };
+}
+
+function buildTodayExamSummary(raw: DashboardRawData, today: string) {
+  const coveredExamIds = new Set<string>();
+  const classTestRows = raw.todayClassTests.flatMap((classTest) => {
+    const classGroup = classTest.classGroup;
+    if (!isClassOnDate(classGroup, today)) return [];
+
+    const todayLessons = classGroup.lessons.filter((lesson) => lesson.lessonDate === today);
+    const todayLessonIds = new Set(todayLessons.map((lesson) => lesson.id));
+    const todayLessonPositions = new Set(todayLessons.map((lesson) => lesson.position));
+    const matchingExams = classTest.exams.filter((exam) =>
+      exam.examDate === today ||
+      Boolean(exam.classLessonId && todayLessonIds.has(exam.classLessonId)) ||
+      Boolean(exam.lessonPosition && todayLessonPositions.has(exam.lessonPosition))
+    );
+    const matchesToday =
+      classTest.type === "REGULAR" ||
+      Boolean(classTest.classLessonId && todayLessonIds.has(classTest.classLessonId)) ||
+      Boolean(classTest.lessonPosition && todayLessonPositions.has(classTest.lessonPosition)) ||
+      matchingExams.length > 0;
+
+    if (!matchesToday) return [];
+    for (const exam of matchingExams) coveredExamIds.add(exam.id);
+
+    const targetStudentIds = new Set(classGroup.studentClasses.map((membership) => membership.studentId));
+    const todayExamIds = new Set(matchingExams.map((exam) => exam.id));
+    const completedStudentIds = new Set(
+      classTest.scores
+        .filter((score) => todayExamIds.has(score.examId))
+        .map((score) => score.studentId)
+    );
+    const target = targetStudentIds.size;
+    const completed = [...completedStudentIds].filter((studentId) => targetStudentIds.has(studentId)).length;
+
+    return [{
+      title: classTest.name,
+      target,
+      completed,
+      missing: Math.max(target - completed, 0),
+    }];
+  });
+  const standaloneExamRows = raw.todayExams.filter((exam) => !coveredExamIds.has(exam.id)).map((exam) => {
+    const targetStudentIds = new Set(exam.classGroup?.studentClasses.map((membership) => membership.studentId) ?? []);
+    const completedStudentIds = new Set([
+      ...exam.testScores.map((score) => score.studentId),
+      ...exam.results.map((result) => result.studentId),
+    ]);
+    const target = targetStudentIds.size > 0 ? targetStudentIds.size : completedStudentIds.size;
+    const completed = targetStudentIds.size > 0
+      ? [...completedStudentIds].filter((studentId) => targetStudentIds.has(studentId)).length
+      : completedStudentIds.size;
+
+    return {
+      title: exam.title,
+      target,
+      completed,
+      missing: Math.max(target - completed, 0),
+    };
+  });
+  const rows = [...classTestRows, ...standaloneExamRows];
+
+  const examCount = rows.length;
+  const target = rows.reduce((sum, row) => sum + row.target, 0);
+  const completed = rows.reduce((sum, row) => sum + row.completed, 0);
+  const missing = rows.reduce((sum, row) => sum + row.missing, 0);
+  const names = rows.map((row) => row.title).slice(0, 2);
+  const detail = examCount === 0
+    ? "오늘 등록된 테스트 없음"
+    : `${names.join(", ")}${examCount > names.length ? ` 외 ${examCount - names.length}개` : ""}`;
+
+  return { examCount, target, completed, missing, detail };
 }
 
 function buildFilterOptions({
@@ -833,23 +1013,24 @@ function isClassOnDate(
     startDate: string | null;
     endDate: string | null;
     daysOfWeek: string | null;
+    schedule: string | null;
     status: string | null;
-    lessons: Array<{ lessonDate: string | null }>;
+    lessons: Array<{ id: string; position: number; lessonDate: string | null }>;
   },
   date: string
 ) {
   if (effectiveClassStatus(classGroup, date) !== "ACTIVE") return false;
-
-  const savedLessons = classGroup.lessons.filter((lesson) => lesson.lessonDate);
-  if (savedLessons.length > 0) return savedLessons.some((lesson) => lesson.lessonDate === date);
 
   const dateValue = dateFromYmd(date);
   if (!dateValue) return false;
   if (classGroup.startDate && date < classGroup.startDate) return false;
   if (classGroup.endDate && date > classGroup.endDate) return false;
 
-  const daysOfWeek = parseClassDaysOfWeek(classGroup.daysOfWeek);
-  return daysOfWeek.includes(dateValue.getDay());
+  const daysOfWeek = parseClassDaysOfWeek(`${classGroup.daysOfWeek ?? ""} ${classGroup.schedule ?? ""}`);
+  if (daysOfWeek.length > 0) return daysOfWeek.includes(dateValue.getDay());
+
+  const savedLessons = classGroup.lessons.filter((lesson) => lesson.lessonDate);
+  return savedLessons.some((lesson) => lesson.lessonDate === date);
 }
 
 function isClassMine(

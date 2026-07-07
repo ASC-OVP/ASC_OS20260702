@@ -13,14 +13,14 @@ import {
   OMR_MAPPING_STATUSES,
 } from "@/features/omr/lib/omrQuestionMeta";
 import { enumValue, omrHref, optionalText, safeReturnTo, text } from "@/features/omr/lib/omrForm";
-import { canManageExam, findExamForUser } from "@/features/omr/lib/omrPermissions";
+import { canManageExamForUser, findExamForUser } from "@/features/omr/lib/omrPermissions";
 
 const ANSWER_FORMAT_VALUES = OMR_ANSWER_FORMATS.map((option) => option.value);
 const MAPPING_STATUS_VALUES = OMR_MAPPING_STATUSES.map((option) => option.value);
 
 export async function saveQuestionMetaAction(formData: FormData) {
   const user = await requireUser();
-  if (!canManageExam(user.role)) return;
+  if (!(await canManageExamForUser(user))) return;
 
   const examId = text(formData, "examId");
   const returnTo = safeReturnTo(text(formData, "returnTo"));
@@ -58,7 +58,7 @@ export async function saveQuestionMetaAction(formData: FormData) {
 
 export async function bulkUpdateQuestionMetaAction(formData: FormData) {
   const user = await requireUser();
-  if (!canManageExam(user.role)) return;
+  if (!(await canManageExamForUser(user))) return;
 
   const examId = text(formData, "examId");
   const returnTo = safeReturnTo(text(formData, "returnTo"));
@@ -108,7 +108,7 @@ export async function bulkUpdateQuestionMetaAction(formData: FormData) {
 
 export async function applyQuestionTemplateAction(formData: FormData) {
   const user = await requireUser();
-  if (!canManageExam(user.role)) return;
+  if (!(await canManageExamForUser(user))) return;
 
   const examId = text(formData, "examId");
   const returnTo = safeReturnTo(text(formData, "returnTo"));
@@ -215,5 +215,4 @@ function cleanMetaText(formData: FormData, keyName: string, maxLength = 120) {
 function key(name: string, questionNo: number) {
   return `${name}-${questionNo}`;
 }
-
 

@@ -19,7 +19,8 @@ export const CALENDAR_EVENT_SOURCES: CalendarEventSource[] = [
 export const IMPLEMENTED_CALENDAR_EVENT_SOURCES: CalendarEventSource[] = ["class_session", "internal_task", "assistant_work_shift", "calendar_private_memo"];
 
 export const CALENDAR_CONTENT_FILTERS: Array<{ id: CalendarContentFilter; label: string; description: string }> = [
-  { id: "lesson_schedule", label: "회차 일정", description: "수업 회차와 업무 일정을 표시합니다." },
+  { id: "lesson_schedule", label: "회차 일정", description: "수업 회차 일정을 표시합니다." },
+  { id: "internal_task", label: "업무", description: "마감일과 담당자가 있는 업무 일정을 표시합니다." },
   { id: "assistant_work_shift", label: "조교 출근 일정", description: "등록된 조교 근무 일정을 표시합니다." },
   { id: "private_memo", label: "작성한 메모", description: "내가 작성한 날짜 메모를 표시합니다." },
 ];
@@ -167,6 +168,6 @@ export const CALENDAR_SEVERITY_META: Record<CalendarSeverity, { labelKo: string 
 };
 
 export const CALENDAR_DEFAULT_FILTERS = {
-  contentTypes: ["lesson_schedule", "assistant_work_shift", "private_memo"],
+  contentTypes: ["lesson_schedule", "internal_task", "assistant_work_shift", "private_memo"],
   staffId: "all",
 } satisfies { contentTypes: CalendarContentFilter[]; staffId: string };

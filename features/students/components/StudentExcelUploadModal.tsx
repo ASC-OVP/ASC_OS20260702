@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createStudentsFromExcelUpload } from "@/features/students/actions/studentActions";
 import StudentClassGroupDropdownField from "@/features/students/components/StudentClassGroupDropdownField";
+import { withJosa } from "@/lib/koreanParticles";
 import { formatPhoneNumber, normalizePhoneNumber, phoneLastDigits } from "@/lib/phone";
 
 type UploadField = "unused" | "name" | "phone" | "parentPhone" | "schoolName" | "grade" | "subject" | "currentLevel" | "memo" | "classGroupName";
@@ -197,7 +198,7 @@ export default function StudentExcelUploadModal({ classGroups, existingStudents,
       );
     }
     if (hadDuplicate) {
-      setMessage(`${fieldLabel(field)}은 한 열에만 매핑됩니다. 기존에 선택된 열은 '사용 안 함'으로 바꿨습니다.`);
+      setMessage(`${withJosa(fieldLabel(field), "은/는")} 한 열에만 매핑됩니다. 기존에 선택된 열은 '사용 안 함'으로 바꿨습니다.`);
     }
   }
 

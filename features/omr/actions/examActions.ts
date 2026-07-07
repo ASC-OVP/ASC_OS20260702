@@ -10,7 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { getOmrTemplate } from "@/features/omr/lib/omrTemplates";
 import { cleanId, enumValue, intValue, normalizeAnswer, omrHref, optionalText, scoreValue, text } from "@/features/omr/lib/omrForm";
 import { deleteStoredOmrFile } from "@/features/omr/lib/omrFileStorage";
-import { canManageExam, findExamForUser } from "@/features/omr/lib/omrPermissions";
+import { canManageExamForUser, findExamForUser } from "@/features/omr/lib/omrPermissions";
 import { resolveLessonCandidate, storedLessonCandidate } from "@/features/classes/lib/lessonScheduleCore";
 
 const OMR_TEMPLATE_TYPES = Object.values(OmrTemplateType) as OmrTemplateType[];
@@ -38,7 +38,7 @@ function resolveOmrTargetLesson(classGroup: OmrLessonClassGroup, targetLessonId:
 
 export async function createExamAction(formData: FormData) {
   const user = await requireUser();
-  if (!canManageExam(user.role)) return;
+  if (!(await canManageExamForUser(user))) return;
 
   const classGroupId = cleanId(text(formData, "classGroupId"));
   const classTestId = cleanId(text(formData, "classTestId"));
@@ -168,7 +168,7 @@ export async function createExamAction(formData: FormData) {
 
 export async function saveAnswerKeyAction(formData: FormData) {
   const user = await requireUser();
-  if (!canManageExam(user.role)) return;
+  if (!(await canManageExamForUser(user))) return;
 
   const examId = text(formData, "examId");
   if (!examId) return;
@@ -212,7 +212,7 @@ export async function saveAnswerKeyAction(formData: FormData) {
 
 export async function deleteExamAction(formData: FormData) {
   const user = await requireUser();
-  if (!canManageExam(user.role)) return;
+  if (!(await canManageExamForUser(user))) return;
 
   const examId = text(formData, "examId");
   if (!examId) return;

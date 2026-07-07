@@ -1,10 +1,11 @@
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
-import { ButtonLink, PageHeader } from "@/components/ui";
+import { PageHeader, Tabs } from "@/components/ui";
 import { bulkStudentMemoAction } from "@/features/memos/actions/memoActions";
 import AnnouncementMemoList, { type AnnouncementMemoView } from "@/features/memos/components/AnnouncementMemoList";
 import PersonalStickyBoard, { type StickyMemoView } from "@/features/memos/components/PersonalStickyBoard";
 import { canManageAnnouncements, requireUser } from "@/lib/auth";
+import { getAssistantWorkNotes } from "@/lib/assistantWorkNotes";
 import { MemoType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { surfaceBorder } from "@/lib/styles";
@@ -20,10 +21,26 @@ type Props = {
     to?: string;
     sort?: string;
     error?: string;
+    tab?: string;
   }>;
 };
 
-type MemoSource = "student" | "class" | "task" | "calendar-private" | "calendar-event";
+type MemoTab = "overview" | "records";
+
+type MemoSource =
+  | "announcement"
+  | "student"
+  | "student-base"
+  | "class"
+  | "lesson"
+  | "assistant"
+  | "work-shift"
+  | "task"
+  | "attendance"
+  | "assignment"
+  | "score"
+  | "omr"
+  | "calendar-event";
 
 type MemoRow = {
   key: string;
@@ -43,10 +60,18 @@ type MemoRow = {
 
 const sourceOptions = [
   ["all", "전체"],
+  ["announcement", "공지"],
   ["student", "학생"],
+  ["student-base", "학생 기본"],
   ["class", "반"],
+  ["lesson", "수업"],
+  ["assistant", "조교"],
+  ["work-shift", "근무"],
   ["task", "업무"],
-  ["calendar-private", "개인 캘린더"],
+  ["attendance", "출결"],
+  ["assignment", "과제"],
+  ["score", "성적"],
+  ["omr", "OMR"],
   ["calendar-event", "일정"],
 ] as const;
 
@@ -58,16 +83,35 @@ export default async function MemosPage({ searchParams }: Props) {
   const user = await requireUser();
   const params = (await searchParams) ?? {};
   const filters = normalizeFilters(params);
-  const returnTo = buildReturnTo(filters);
+  const activeTab = normalizeTab(params.tab);
+  const returnTo = buildReturnTo(filters, "records");
   const canManage = canManageAnnouncements(user.role);
 
-  const [announcements, stickyMemos, studentMemos, classMemos, taskComments, privateMemos, eventMemos, writers] = await Promise.all([
+  const [
+    announcements,
+    stickyMemos,
+    studentMemos,
+    studentBaseMemos,
+    classMemos,
+    classLessonMemos,
+    assistantWorkNotes,
+    assistantWorkShiftMemos,
+    taskComments,
+    attendanceMemos,
+    assignmentMemos,
+    scoreMemos,
+    schoolScoreMemos,
+    studentTestScoreMemos,
+    omrUploadMemos,
+    eventMemos,
+    writers,
+  ] = await Promise.all([
     prisma.announcementMemo.findMany({
       where: { academyId: user.academyId },
       orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
       take: 80,
       include: {
-        author: { select: { name: true } },
+        author: { select: { id: true, name: true } },
         reads: { where: { userId: user.id }, select: { readAt: true } },
         _count: { select: { reads: true } },
       },
@@ -76,7 +120,7 @@ export default async function MemosPage({ searchParams }: Props) {
       where: { academyId: user.academyId, userId: user.id },
       orderBy: { updatedAt: "desc" },
       take: 80,
-      select: { id: true, content: true, color: true, updatedAt: true },
+      select: { id: true, content: true, color: true, createdAt: true, updatedAt: true },
     }),
     prisma.studentMemo.findMany({
       where: { student: { academyId: user.academyId } },
@@ -97,12 +141,31 @@ export default async function MemosPage({ searchParams }: Props) {
         writer: { select: { id: true, name: true } },
       },
     }),
+    prisma.student.findMany({
+      where: { academyId: user.academyId, memo: { not: null } },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true, name: true, schoolName: true, memo: true, updatedAt: true },
+    }),
     prisma.classMemo.findMany({
       where: { academyId: user.academyId },
       orderBy: { createdAt: "desc" },
       include: {
         classGroup: { select: { id: true, name: true } },
         writer: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.classLesson.findMany({
+      where: { academyId: user.academyId, memo: { not: null } },
+      orderBy: { updatedAt: "desc" },
+      include: { classGroup: { select: { id: true, name: true } } },
+    }),
+    getAssistantWorkNotes(user.academyId),
+    prisma.assistantWorkShift.findMany({
+      where: { academyId: user.academyId, memo: { not: null } },
+      orderBy: { updatedAt: "desc" },
+      include: {
+        assistant: { select: { id: true, name: true } },
+        createdBy: { select: { id: true, name: true } },
       },
     }),
     prisma.taskComment.findMany({
@@ -120,10 +183,42 @@ export default async function MemosPage({ searchParams }: Props) {
         },
       },
     }),
-    prisma.calendarPrivateMemo.findMany({
-      where: { academyId: user.academyId, userId: user.id },
-      orderBy: { date: "desc" },
-      select: { id: true, userId: true, date: true, content: true, createdAt: true },
+    prisma.attendanceRecord.findMany({
+      where: { academyId: user.academyId, memo: { not: null } },
+      orderBy: { updatedAt: "desc" },
+      include: { student: { select: { id: true, name: true, schoolName: true } } },
+    }),
+    prisma.assignmentRecord.findMany({
+      where: { academyId: user.academyId, memo: { not: null } },
+      orderBy: { updatedAt: "desc" },
+      include: { student: { select: { id: true, name: true, schoolName: true } } },
+    }),
+    prisma.scoreRecord.findMany({
+      where: { academyId: user.academyId, memo: { not: null } },
+      orderBy: { updatedAt: "desc" },
+      include: { student: { select: { id: true, name: true, schoolName: true } } },
+    }),
+    prisma.schoolScoreRecord.findMany({
+      where: { academyId: user.academyId, memo: { not: null } },
+      orderBy: { updatedAt: "desc" },
+      include: { student: { select: { id: true, name: true, schoolName: true } } },
+    }),
+    prisma.studentTestScore.findMany({
+      where: { academyId: user.academyId, memo: { not: null } },
+      orderBy: { updatedAt: "desc" },
+      include: {
+        student: { select: { id: true, name: true, schoolName: true } },
+        classGroup: { select: { id: true, name: true } },
+        exam: { select: { title: true } },
+      },
+    }),
+    prisma.omrUpload.findMany({
+      where: { academyId: user.academyId, memo: { not: null } },
+      orderBy: { updatedAt: "desc" },
+      include: {
+        student: { select: { id: true, name: true, schoolName: true } },
+        exam: { select: { title: true } },
+      },
     }),
     prisma.calendarEventMemo.findMany({
       where: { academyId: user.academyId },
@@ -146,6 +241,7 @@ export default async function MemosPage({ searchParams }: Props) {
       isPinned: memo.isPinned,
       createdAt: memo.createdAt,
       updatedAt: memo.updatedAt,
+      authorId: memo.author.id,
       authorName: memo.author.name,
       readAt: memo.reads[0]?.readAt ?? null,
       readCount: memo._count.reads,
@@ -159,7 +255,41 @@ export default async function MemosPage({ searchParams }: Props) {
     updatedAt: memo.updatedAt,
   }));
 
+  const userNameById = new Map(writers.map((writer) => [writer.id, writer.name]));
+
   const rows: MemoRow[] = [
+    ...announcementViews.map((memo): MemoRow => ({
+      key: `announcement:${memo.id}`,
+      source: "announcement",
+      sourceLabel: "공지",
+      targetLabel: memo.title,
+      targetHref: "/memos",
+      content: memo.content,
+      typeLabel: priorityText(memo.priority),
+      typeValue: null,
+      isImportant: memo.priority === "IMPORTANT" || memo.priority === "URGENT" || memo.isPinned,
+      writerId: memo.authorId,
+      writerName: memo.authorName,
+      createdAt: memo.createdAt,
+      selectableStudentMemoId: null,
+    })),
+    ...studentBaseMemos
+      .filter((memo) => memo.memo?.trim())
+      .map((memo): MemoRow => ({
+        key: `student-base:${memo.id}`,
+        source: "student-base",
+        sourceLabel: "학생 기본",
+        targetLabel: [memo.name, memo.schoolName].filter(Boolean).join(" / "),
+        targetHref: `/students/${memo.id}`,
+        content: memo.memo ?? "",
+        typeLabel: "기본 메모",
+        typeValue: null,
+        isImportant: false,
+        writerId: null,
+        writerName: "-",
+        createdAt: memo.updatedAt,
+        selectableStudentMemoId: null,
+      })),
     ...studentMemos.map((memo): MemoRow => ({
       key: `student:${memo.id}`,
       source: "student",
@@ -190,6 +320,55 @@ export default async function MemosPage({ searchParams }: Props) {
       createdAt: memo.createdAt,
       selectableStudentMemoId: null,
     })),
+    ...classLessonMemos
+      .filter((memo) => memo.memo?.trim())
+      .map((memo): MemoRow => ({
+        key: `lesson:${memo.id}`,
+        source: "lesson",
+        sourceLabel: "수업",
+        targetLabel: [memo.classGroup.name, memo.title || `${memo.position}회차`, memo.lessonDate].filter(Boolean).join(" / "),
+        targetHref: `/classes/${memo.classGroupId}`,
+        content: memo.memo ?? "",
+        typeLabel: "수업 메모",
+        typeValue: null,
+        isImportant: false,
+        writerId: null,
+        writerName: "-",
+        createdAt: memo.updatedAt,
+        selectableStudentMemoId: null,
+      })),
+    ...Object.entries(assistantWorkNotes).map(([assistantId, note]): MemoRow => ({
+      key: `assistant-note:${assistantId}`,
+      source: "assistant",
+      sourceLabel: "조교",
+      targetLabel: userNameById.get(assistantId) ?? "조교",
+      targetHref: `/work?assistantId=${assistantId}`,
+      content: note.content,
+      typeLabel: "조교 운영 메모",
+      typeValue: null,
+      isImportant: false,
+      writerId: note.updatedById || null,
+      writerName: note.updatedByName || userNameById.get(note.updatedById) || "-",
+      createdAt: safeDate(note.updatedAt),
+      selectableStudentMemoId: null,
+    })),
+    ...assistantWorkShiftMemos
+      .filter((memo) => memo.memo?.trim())
+      .map((memo): MemoRow => ({
+        key: `work-shift:${memo.id}`,
+        source: "work-shift",
+        sourceLabel: "근무",
+        targetLabel: [memo.assistant.name, memo.workDate, `${memo.startTime}-${memo.endTime}`].filter(Boolean).join(" / "),
+        targetHref: `/work?assistantId=${memo.assistantId}`,
+        content: memo.memo ?? "",
+        typeLabel: "근무 메모",
+        typeValue: null,
+        isImportant: false,
+        writerId: memo.createdById,
+        writerName: memo.createdBy?.name ?? "-",
+        createdAt: memo.updatedAt,
+        selectableStudentMemoId: null,
+      })),
     ...taskComments.map((comment): MemoRow => ({
       key: `task:${comment.id}`,
       source: "task",
@@ -205,21 +384,108 @@ export default async function MemosPage({ searchParams }: Props) {
       createdAt: comment.createdAt,
       selectableStudentMemoId: null,
     })),
-    ...privateMemos.map((memo): MemoRow => ({
-      key: `calendar-private:${memo.id}`,
-      source: "calendar-private",
-      sourceLabel: "개인 캘린더",
-      targetLabel: memo.date,
-      targetHref: "/calendar",
-      content: memo.content,
-      typeLabel: "개인 메모",
-      typeValue: null,
-      isImportant: false,
-      writerId: memo.userId,
-      writerName: user.name,
-      createdAt: memo.createdAt,
-      selectableStudentMemoId: null,
-    })),
+    ...attendanceMemos
+      .filter((memo) => memo.memo?.trim())
+      .map((memo): MemoRow => ({
+        key: `attendance:${memo.id}`,
+        source: "attendance",
+        sourceLabel: "출결",
+        targetLabel: [memo.student.name, memo.date, memo.status].filter(Boolean).join(" / "),
+        targetHref: `/students/${memo.studentId}`,
+        content: memo.memo ?? "",
+        typeLabel: "출결 메모",
+        typeValue: null,
+        isImportant: false,
+        writerId: null,
+        writerName: "-",
+        createdAt: memo.updatedAt,
+        selectableStudentMemoId: null,
+      })),
+    ...assignmentMemos
+      .filter((memo) => memo.memo?.trim())
+      .map((memo): MemoRow => ({
+        key: `assignment:${memo.id}`,
+        source: "assignment",
+        sourceLabel: "과제",
+        targetLabel: [memo.student.name, memo.date, memo.title].filter(Boolean).join(" / "),
+        targetHref: `/students/${memo.studentId}`,
+        content: memo.memo ?? "",
+        typeLabel: "과제 메모",
+        typeValue: null,
+        isImportant: false,
+        writerId: null,
+        writerName: "-",
+        createdAt: memo.updatedAt,
+        selectableStudentMemoId: null,
+      })),
+    ...scoreMemos
+      .filter((memo) => memo.memo?.trim())
+      .map((memo): MemoRow => ({
+        key: `score:${memo.id}`,
+        source: "score",
+        sourceLabel: "성적",
+        targetLabel: [memo.student.name, memo.date, memo.title].filter(Boolean).join(" / "),
+        targetHref: `/students/${memo.studentId}`,
+        content: memo.memo ?? "",
+        typeLabel: "성적 메모",
+        typeValue: null,
+        isImportant: false,
+        writerId: null,
+        writerName: "-",
+        createdAt: memo.updatedAt,
+        selectableStudentMemoId: null,
+      })),
+    ...schoolScoreMemos
+      .filter((memo) => memo.memo?.trim())
+      .map((memo): MemoRow => ({
+        key: `school-score:${memo.id}`,
+        source: "score",
+        sourceLabel: "성적",
+        targetLabel: [memo.student.name, memo.term, memo.examType, memo.subject].filter(Boolean).join(" / "),
+        targetHref: `/students/${memo.studentId}`,
+        content: memo.memo ?? "",
+        typeLabel: "학교 성적 메모",
+        typeValue: null,
+        isImportant: false,
+        writerId: null,
+        writerName: "-",
+        createdAt: memo.updatedAt,
+        selectableStudentMemoId: null,
+      })),
+    ...studentTestScoreMemos
+      .filter((memo) => memo.memo?.trim())
+      .map((memo): MemoRow => ({
+        key: `test-score:${memo.id}`,
+        source: "score",
+        sourceLabel: "성적",
+        targetLabel: [memo.student.name, memo.classGroup.name, memo.exam.title].filter(Boolean).join(" / "),
+        targetHref: `/students/${memo.studentId}`,
+        content: memo.memo ?? "",
+        typeLabel: "시험 성적 메모",
+        typeValue: null,
+        isImportant: false,
+        writerId: null,
+        writerName: "-",
+        createdAt: memo.updatedAt,
+        selectableStudentMemoId: null,
+      })),
+    ...omrUploadMemos
+      .filter((memo) => memo.memo?.trim())
+      .map((memo): MemoRow => ({
+        key: `omr:${memo.id}`,
+        source: "omr",
+        sourceLabel: "OMR",
+        targetLabel: [memo.student?.name, memo.exam?.title, memo.fileName].filter(Boolean).join(" / "),
+        targetHref: `/omr/uploads/${memo.id}`,
+        content: memo.memo ?? "",
+        typeLabel: "OMR 메모",
+        typeValue: null,
+        isImportant: false,
+        writerId: null,
+        writerName: "-",
+        createdAt: memo.updatedAt,
+        selectableStudentMemoId: null,
+      })),
     ...eventMemos.map((memo): MemoRow => ({
       key: `calendar-event:${memo.id}`,
       source: "calendar-event",
@@ -243,6 +509,10 @@ export default async function MemosPage({ searchParams }: Props) {
   const classMemoCount = rows.filter((row) => row.source === "class").length;
   const importantCount = rows.filter((row) => row.isImportant).length;
   const otherMemoCount = rows.length - studentMemoCount - classMemoCount;
+  const tabItems = [
+    { label: "공지·메모", href: memoTabHref("overview"), active: activeTab === "overview", count: announcementViews.length + stickyViews.length },
+    { label: "기록", href: memoTabHref("records"), active: activeTab === "records", count: rows.length },
+  ];
 
   return (
     <main style={page}>
@@ -253,126 +523,143 @@ export default async function MemosPage({ searchParams }: Props) {
             eyebrow="메모"
             title="메모 관리"
             description="운영 공지, 개인 메모, 학생·반·업무 기록 메모를 빠르게 확인합니다."
-            actions={<ButtonLink href="/memos/new" size="sm">학생 메모 추가</ButtonLink>}
           />
         </div>
 
-        <section className="memo-main-grid" style={memoGrid}>
-          <AnnouncementMemoList announcements={announcementViews} canManage={canManage} error={params.error} />
-          <PersonalStickyBoard memos={stickyViews} />
-        </section>
+        <div style={tabsWrap}>
+          <Tabs items={tabItems} label="메모 관리 분류" />
+        </div>
 
-        <section style={legacyPanel}>
-          <div style={legacyHead}>
-            <div>
-              <h2 style={legacyTitle}>기존 기록 메모</h2>
-              <p style={legacyDesc}>학생·반·업무·캘린더에 연결된 메모는 보존하고, 필요할 때 검색해서 확인합니다.</p>
-            </div>
-            <div style={legacySummary}>
-              <span style={legacyPill}>전체 {rows.length}개</span>
-              <span style={legacyPill}>학생 {studentMemoCount}개</span>
-              <span style={legacyPill}>기타 {classMemoCount + otherMemoCount}개</span>
-              {importantCount > 0 && <span style={legacyWarnPill}>중요 {importantCount}개</span>}
-            </div>
-          </div>
+        {activeTab === "overview" && (
+          <section className="memo-overview-grid" style={overviewGrid}>
+            <AnnouncementMemoList announcements={announcementViews} canManage={canManage} error={params.error} />
+            <PersonalStickyBoard memos={stickyViews} />
+          </section>
+        )}
 
-        <form className="memo-filter-grid asc-filter-bar" style={filterBar}>
-          <input className="memo-search-field" name="q" defaultValue={filters.q} placeholder="내용, 학생명, 반, 작성자 검색" style={searchInput} />
-          <select name="source" defaultValue={filters.source} style={selectInput}>
-            {sourceOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
-          <select name="type" defaultValue={filters.type} style={selectInput}>
-            <option value="all">유형 전체</option>
-            {memoTypes.map((type) => <option key={type} value={type}>{memoTypeText(type)}</option>)}
-          </select>
-          <select name="important" defaultValue={filters.important} style={selectInput}>
-            <option value="all">중요 전체</option>
-            <option value="important">중요만</option>
-            <option value="normal">일반만</option>
-          </select>
-          <select name="writerId" defaultValue={filters.writerId} style={selectInput}>
-            <option value="all">작성자 전체</option>
-            {writers.map((writer) => <option key={writer.id} value={writer.id}>{writer.name}</option>)}
-          </select>
-          <input name="from" type="date" defaultValue={filters.from} style={dateInput} />
-          <input name="to" type="date" defaultValue={filters.to} style={dateInput} />
-          <select name="sort" defaultValue={filters.sort} style={selectInput}>
-            <option value="newest">최신순</option>
-            <option value="oldest">오래된순</option>
-            <option value="important">중요 우선</option>
-          </select>
-          <button style={secondaryButton}>적용</button>
-          <Link href="/memos" style={ghostButton}>초기화</Link>
-        </form>
-
-        <form action={bulkStudentMemoAction} style={tablePanel}>
-          <input type="hidden" name="returnTo" value={returnTo} />
-          <div style={bulkBar}>
-            <div style={bulkLeft}>
-              <b>{filteredRows.length}개</b>
-              <span>필터 결과</span>
-              <span style={muted}>일괄 변경은 학생 메모에만 적용됩니다.</span>
-              {filteredRows.length > visibleRows.length && <span style={muted}>최대 500개 표시 중</span>}
+        {activeTab === "records" && (
+          <section style={legacyPanel}>
+            <div style={legacyHead}>
+              <div>
+                <h2 style={legacyTitle}>기존 기록 메모</h2>
+                <p style={legacyDesc}>학생·반·업무·캘린더에 연결된 메모는 보존하고, 필요할 때 검색해서 확인합니다.</p>
+              </div>
+              <div style={legacySummary}>
+                <span style={legacyPill}>전체 {rows.length}개</span>
+                <span style={legacyPill}>학생 {studentMemoCount}개</span>
+                <span style={legacyPill}>기타 {classMemoCount + otherMemoCount}개</span>
+                {importantCount > 0 && <span style={legacyWarnPill}>중요 {importantCount}개</span>}
+              </div>
             </div>
-            <div style={bulkActions}>
-              <button name="bulkAction" value="pin" style={smallButton}>중요 표시</button>
-              <button name="bulkAction" value="unpin" style={smallButton}>중요 해제</button>
-              <select name="memoType" defaultValue="GENERAL" style={compactSelect}>
+
+            <form className="memo-filter-grid asc-filter-bar" style={filterBar}>
+              <input type="hidden" name="tab" value="records" />
+              <input className="memo-search-field" name="q" defaultValue={filters.q} placeholder="내용, 학생명, 반, 작성자 검색" style={searchInput} />
+              <select name="source" defaultValue={filters.source} style={selectInput}>
+                {sourceOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+              <select name="type" defaultValue={filters.type} style={selectInput}>
+                <option value="all">유형 전체</option>
                 {memoTypes.map((type) => <option key={type} value={type}>{memoTypeText(type)}</option>)}
               </select>
-              <button name="bulkAction" value="type" style={smallButton}>유형 변경</button>
-            </div>
-          </div>
+              <select name="important" defaultValue={filters.important} style={selectInput}>
+                <option value="all">중요 전체</option>
+                <option value="important">중요만</option>
+                <option value="normal">일반만</option>
+              </select>
+              <select name="writerId" defaultValue={filters.writerId} style={selectInput}>
+                <option value="all">작성자 전체</option>
+                {writers.map((writer) => <option key={writer.id} value={writer.id}>{writer.name}</option>)}
+              </select>
+              <input name="from" type="date" defaultValue={filters.from} style={dateInput} />
+              <input name="to" type="date" defaultValue={filters.to} style={dateInput} />
+              <select name="sort" defaultValue={filters.sort} style={selectInput}>
+                <option value="newest">최신순</option>
+                <option value="oldest">오래된순</option>
+                <option value="important">중요 우선</option>
+              </select>
+              <button style={secondaryButton}>적용</button>
+              <Link href="/memos?tab=records" style={ghostButton}>초기화</Link>
+            </form>
 
-          <div style={tableWrap}>
-            <table style={table}>
-              <thead>
-                <tr>
-                  <Th>선택</Th>
-                  <Th>구분</Th>
-                  <Th>대상</Th>
-                  <Th>내용</Th>
-                  <Th>유형</Th>
-                  <Th>작성자</Th>
-                  <Th>작성일</Th>
-                  <Th>이동</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleRows.map((row) => (
-                  <tr key={row.key}>
-                    <Td>
-                      {row.selectableStudentMemoId ? (
-                        <input type="checkbox" name="studentMemoIds" value={row.selectableStudentMemoId} aria-label={`${row.targetLabel} 선택`} />
-                      ) : (
-                        <span style={muted}>-</span>
-                      )}
-                    </Td>
-                    <Td>
-                      <span style={sourceBadge(row.source)}>{row.sourceLabel}</span>
-                      {row.isImportant && <span style={importantBadge}>중요</span>}
-                    </Td>
-                    <Td><b>{row.targetLabel || "-"}</b></Td>
-                    <Td><p className="memo-clamp" style={memoText}>{row.content}</p></Td>
-                    <Td>{row.typeLabel}</Td>
-                    <Td>{row.writerName}</Td>
-                    <Td>{formatDateTime(row.createdAt)}</Td>
-                    <Td><Link href={row.targetHref} style={linkButton}>열기</Link></Td>
-                  </tr>
-                ))}
-                {visibleRows.length === 0 && (
-                  <tr>
-                    <td colSpan={8} style={emptyCell}>조건에 맞는 메모가 없습니다.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </form>
-        </section>
+            <form action={bulkStudentMemoAction} style={tablePanel}>
+              <input type="hidden" name="returnTo" value={returnTo} />
+              <div style={bulkBar}>
+                <div style={bulkLeft}>
+                  <b>{filteredRows.length}개</b>
+                  <span>필터 결과</span>
+                  <span style={muted}>일괄 변경은 학생 메모에만 적용됩니다.</span>
+                  {filteredRows.length > visibleRows.length && <span style={muted}>최대 500개 표시 중</span>}
+                </div>
+                <div style={bulkActions}>
+                  <button name="bulkAction" value="pin" style={smallButton}>중요 표시</button>
+                  <button name="bulkAction" value="unpin" style={smallButton}>중요 해제</button>
+                  <select name="memoType" defaultValue="GENERAL" style={compactSelect}>
+                    {memoTypes.map((type) => <option key={type} value={type}>{memoTypeText(type)}</option>)}
+                  </select>
+                  <button name="bulkAction" value="type" style={smallButton}>유형 변경</button>
+                </div>
+              </div>
+
+              <div style={tableWrap}>
+                <table style={table}>
+                  <thead>
+                    <tr>
+                      <Th>선택</Th>
+                      <Th>구분</Th>
+                      <Th>대상</Th>
+                      <Th>내용</Th>
+                      <Th>유형</Th>
+                      <Th>작성자</Th>
+                      <Th>작성일</Th>
+                      <Th>이동</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleRows.map((row) => (
+                      <tr key={row.key}>
+                        <Td>
+                          {row.selectableStudentMemoId ? (
+                            <input type="checkbox" name="studentMemoIds" value={row.selectableStudentMemoId} aria-label={`${row.targetLabel} 선택`} />
+                          ) : (
+                            <span style={muted}>-</span>
+                          )}
+                        </Td>
+                        <Td>
+                          <span style={sourceBadge(row.source)}>{row.sourceLabel}</span>
+                          {row.isImportant && <span style={importantBadge}>중요</span>}
+                        </Td>
+                        <Td><b>{row.targetLabel || "-"}</b></Td>
+                        <Td><p className="memo-clamp" style={memoText}>{row.content}</p></Td>
+                        <Td>{row.typeLabel}</Td>
+                        <Td>{row.writerName}</Td>
+                        <Td>{formatDateTime(row.createdAt)}</Td>
+                        <Td><Link href={row.targetHref} style={linkButton}>열기</Link></Td>
+                      </tr>
+                    ))}
+                    {visibleRows.length === 0 && (
+                      <tr>
+                        <td colSpan={8} style={emptyCell}>조건에 맞는 메모가 없습니다.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </form>
+          </section>
+        )}
       </section>
     </main>
   );
+}
+
+function normalizeTab(tab?: string): MemoTab {
+  if (tab === "records") return "records";
+  return "overview";
+}
+
+function memoTabHref(tab: MemoTab) {
+  return tab === "overview" ? "/memos" : `/memos?tab=${tab}`;
 }
 
 function normalizeFilters(params: Awaited<NonNullable<Props["searchParams"]>>) {
@@ -422,8 +709,15 @@ function sortAnnouncements(a: AnnouncementMemoView, b: AnnouncementMemoView) {
   return b.createdAt.getTime() - a.createdAt.getTime();
 }
 
-function buildReturnTo(filters: ReturnType<typeof normalizeFilters>) {
+function priorityText(priority: string) {
+  if (priority === "URGENT") return "긴급 공지";
+  if (priority === "IMPORTANT") return "중요 공지";
+  return "일반 공지";
+}
+
+function buildReturnTo(filters: ReturnType<typeof normalizeFilters>, tab: MemoTab) {
   const params = new URLSearchParams();
+  if (tab !== "overview") params.set("tab", tab);
   for (const [key, value] of Object.entries(filters)) {
     if (!value || value === "all" || (key === "sort" && value === "newest")) continue;
     params.set(key, value);
@@ -450,6 +744,11 @@ function dateKey(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
+function safeDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? new Date(0) : date;
+}
+
 function formatDateTime(date: Date) {
   return new Intl.DateTimeFormat("ko-KR", {
     month: "2-digit",
@@ -469,10 +768,18 @@ function Td({ children }: { children: ReactNode }) {
 
 function sourceBadge(source: MemoSource): CSSProperties {
   const colors: Record<MemoSource, { bg: string; fg: string }> = {
+    announcement: { bg: "var(--asc-accent-soft)", fg: "var(--asc-accent)" },
     student: { bg: "var(--asc-primary-soft)", fg: "var(--asc-primary)" },
+    "student-base": { bg: "var(--asc-primary-softer)", fg: "var(--asc-primary-deep)" },
     class: { bg: "var(--asc-success-soft)", fg: "var(--asc-success)" },
+    lesson: { bg: "var(--asc-success-soft)", fg: "var(--asc-success)" },
+    assistant: { bg: "var(--asc-warning-soft)", fg: "var(--asc-warning-text)" },
+    "work-shift": { bg: "var(--asc-warning-soft)", fg: "var(--asc-warning-text)" },
     task: { bg: "var(--asc-warning-soft)", fg: "var(--asc-warning-text)" },
-    "calendar-private": { bg: "var(--asc-info-soft)", fg: "var(--asc-info)" },
+    attendance: { bg: "var(--asc-info-soft)", fg: "var(--asc-info)" },
+    assignment: { bg: "var(--asc-info-soft)", fg: "var(--asc-info)" },
+    score: { bg: "var(--asc-danger-soft)", fg: "var(--asc-danger)" },
+    omr: { bg: "var(--asc-bg-subtle)", fg: "var(--asc-text-subtle)" },
     "calendar-event": { bg: "var(--asc-danger-soft)", fg: "var(--asc-danger)" },
   };
   const color = colors[source];
@@ -480,8 +787,8 @@ function sourceBadge(source: MemoSource): CSSProperties {
 }
 
 const memoPageCss = `
-  .memo-main-grid {
-    grid-template-columns: minmax(0, 1.45fr) minmax(320px, .75fr);
+  .memo-overview-grid {
+    grid-template-columns: minmax(0, 3fr) minmax(280px, 1fr);
   }
   .memo-filter-grid {
     grid-template-columns: minmax(260px, 2fr) repeat(4, minmax(112px, .8fr)) repeat(2, 128px) minmax(104px, .7fr) auto auto;
@@ -492,7 +799,7 @@ const memoPageCss = `
     -webkit-box-orient: vertical;
   }
   @media (max-width: 1120px) {
-    .memo-main-grid {
+    .memo-overview-grid {
       grid-template-columns: 1fr;
     }
     .memo-filter-grid {
@@ -507,7 +814,8 @@ const memoPageCss = `
 const page: CSSProperties = { padding: 10, color: "var(--asc-text)", background: "var(--asc-bg-subtle)", minHeight: "100vh" };
 const container: CSSProperties = { width: "100%", maxWidth: "none", margin: 0, display: "grid", gap: 10 };
 const header: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, background: "transparent", border: 0, borderRadius: 0, padding: "0 2px 2px", boxShadow: "none" };
-const memoGrid: CSSProperties = { display: "grid", gap: 10, alignItems: "start" };
+const tabsWrap: CSSProperties = { minWidth: 0 };
+const overviewGrid: CSSProperties = { display: "grid", gap: 10, alignItems: "start" };
 const legacyPanel: CSSProperties = { display: "grid", gap: 8, background: "var(--asc-surface)", border: surfaceBorder, borderRadius: "var(--asc-radius-lg)", padding: 10, boxShadow: "var(--asc-shadow-sm)" };
 const legacyHead: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" };
 const legacyTitle: CSSProperties = { margin: 0, fontSize: 18, fontWeight: 950 };

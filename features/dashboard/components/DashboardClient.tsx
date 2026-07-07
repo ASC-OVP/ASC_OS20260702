@@ -1,31 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { Badge, Button, ButtonLink, EmptyState, Input, Select } from "@/components/ui";
-import { hideOperationalQueueItem } from "@/features/dashboard/actions/dashboardActions";
+import { Badge, ButtonLink, EmptyState, Select } from "@/components/ui";
 import { DASHBOARD_SEVERITY_ORDER, DASHBOARD_SIGNAL_LABELS } from "@/features/dashboard/constants";
 import type {
-  DashboardFilterOption,
   DashboardFilterState,
   DashboardSignalSeverity,
   DashboardSignalType,
   DashboardSummaryCard,
   DashboardViewData,
-  CommunicationWidgetData,
   ManagementStudentItem,
-  OmrScoreWidgetData,
   OperationsInboxItem,
-  PaymentMaterialsWidgetData,
-  RecentActivityItem,
   TodayClassOperation,
 } from "@/features/dashboard/types";
 import { surfaceBorder } from "@/lib/styles";
 
 const defaultFilters: DashboardFilterState = {
   query: "",
-  dateScope: "all",
+  dateScope: "today",
   classGroupId: "all",
   ownerId: "all",
   signalType: "all",
@@ -40,35 +34,18 @@ const inboxTabs: Array<{ value: "all" | "critical" | "warning" | "dueToday" | "m
   { value: "mine", label: "내 담당" },
 ];
 
-type DashboardBadgeTone = "gray" | "blue" | "green" | "yellow" | "red" | "navy";
-
 export default function DashboardClient({ data }: { data: DashboardViewData }) {
   const [filters, setFilters] = useState<DashboardFilterState>(defaultFilters);
   const [tab, setTab] = useState<(typeof inboxTabs)[number]["value"]>("all");
   const [selectedId, setSelectedId] = useState<string | null>(data.inboxItems[0]?.id ?? null);
-  const [hiddenInboxIds, setHiddenInboxIds] = useState<string[]>([]);
-  const [, startHideTransition] = useTransition();
 
-  const visibleInboxItems = useMemo(
-    () => data.inboxItems.filter((item) => !hiddenInboxIds.includes(item.id)),
-    [data.inboxItems, hiddenInboxIds]
-  );
+  const visibleInboxItems = useMemo(() => data.inboxItems.filter((item) => isTodayInboxItem(item, data.today)), [data.inboxItems, data.today]);
   const filteredItems = useMemo(() => filterInboxItems(visibleInboxItems, filters, tab, data.today), [data.today, filters, tab, visibleInboxItems]);
   const selectedItem = filteredItems.find((item) => item.id === selectedId) ?? filteredItems[0] ?? null;
   const activeFilterCount = countActiveFilters(filters);
   const criticalCount = visibleInboxItems.filter((item) => item.severity === "critical").length;
-  const dueTodayCount = visibleInboxItems.filter((item) => item.dateScope === "today" || item.dueKey === data.today || item.dateKey === data.today).length;
+  const dueTodayCount = visibleInboxItems.length;
   const mineCount = visibleInboxItems.filter((item) => item.isMine).length;
-
-  function hideInboxItem(id: string) {
-    setHiddenInboxIds((current) => (current.includes(id) ? current : [...current, id]));
-    if (selectedId === id) setSelectedId(null);
-    startHideTransition(() => {
-      void hideOperationalQueueItem(id).catch(() => {
-        setHiddenInboxIds((current) => current.filter((itemId) => itemId !== id));
-      });
-    });
-  }
 
   return (
     <section style={pageStack}>
@@ -79,13 +56,6 @@ export default function DashboardClient({ data }: { data: DashboardViewData }) {
         criticalCount={criticalCount}
         dueTodayCount={dueTodayCount}
         mineCount={mineCount}
-      />
-
-      <DashboardFilterBar
-        filters={filters}
-        setFilters={setFilters}
-        data={data}
-        activeFilterCount={activeFilterCount}
       />
 
       <DashboardSummaryCards cards={data.summaryCards} />
@@ -101,7 +71,6 @@ export default function DashboardClient({ data }: { data: DashboardViewData }) {
           data={data}
           selectedId={selectedItem?.id ?? null}
           onSelect={setSelectedId}
-          onHide={hideInboxItem}
           activeFilterCount={activeFilterCount}
         />
         <DashboardDetailPanel item={selectedItem} />
@@ -110,10 +79,6 @@ export default function DashboardClient({ data }: { data: DashboardViewData }) {
       <section style={secondaryGrid} aria-label="보조 운영 위젯">
         <TodayClassesWidget classes={data.todayClasses} />
         <ManagementNeededStudentsPanel students={data.managementStudents} />
-        <CommunicationWidget communication={data.communication} />
-        <OmrScoreWidget omrScore={data.omrScore} />
-        <PaymentMaterialsWidget paymentMaterials={data.paymentMaterials} />
-        <RecentActivityPanel activities={data.recentActivities} />
       </section>
     </section>
   );
@@ -158,95 +123,69 @@ function DashboardScopeBar({
   );
 }
 
-function DashboardFilterBar({
-  filters,
-  setFilters,
-  data,
-  activeFilterCount,
-}: {
-  filters: DashboardFilterState;
-  setFilters: (filters: DashboardFilterState) => void;
-  data: DashboardViewData;
-  activeFilterCount: number;
-}) {
-  const classLabel = filters.classGroupId !== "all" ? filterOptionLabel(data.filterOptions.classGroups, filters.classGroupId) : null;
-  const ownerLabel = filters.ownerId !== "all" ? filterOptionLabel(data.filterOptions.owners, filters.ownerId) : null;
-
-  return (
-    <section style={filterPanel} aria-label="대시보드 필터">
-      <div style={filterFields}>
-        <Input
-          aria-label="검색"
-          value={filters.query}
-          onChange={(event) => setFilters({ ...filters, query: event.target.value })}
-          placeholder="검색"
-          style={filterControl}
-        />
-        <Select aria-label="기간" value={filters.dateScope} style={filterControl} onChange={(event) => setFilters({ ...filters, dateScope: event.target.value as DashboardFilterState["dateScope"] })}>
-          <option value="all">기간 전체</option>
-          <option value="today">오늘</option>
-          <option value="week">최근/이번 주</option>
-        </Select>
-        <Select aria-label="반" value={filters.classGroupId} style={filterControl} onChange={(event) => setFilters({ ...filters, classGroupId: event.target.value })}>
-          <option value="all">전체 반</option>
-          {data.filterOptions.classGroups.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </Select>
-        <Button variant="secondary" size="sm" style={filterResetButton} onClick={() => setFilters(defaultFilters)} disabled={activeFilterCount === 0}>
-          초기화
-        </Button>
-      </div>
-      {activeFilterCount > 0 && (
-        <div style={activeFilters}>
-          <Badge tone="blue">활성 필터 {activeFilterCount}개</Badge>
-          {filters.query && <Badge>{`검색: ${filters.query}`}</Badge>}
-          {filters.dateScope !== "all" && <Badge>{filters.dateScope === "today" ? "오늘" : "최근/이번 주"}</Badge>}
-          {classLabel && <Badge>{classLabel}</Badge>}
-          {ownerLabel && <Badge>{ownerLabel}</Badge>}
-          {filters.signalType !== "all" && <Badge>{DASHBOARD_SIGNAL_LABELS[filters.signalType]}</Badge>}
-          {filters.severity !== "all" && <Badge>{severityLabel(filters.severity)}</Badge>}
-        </div>
-      )}
-    </section>
-  );
-}
-
 function DashboardSummaryCards({ cards }: { cards: DashboardSummaryCard[] }) {
   return (
-    <section style={summaryGrid} aria-label="운영 요약 카드">
+    <section style={summaryGrid} aria-label="오늘 처리 현황">
       {cards.map((card) => {
-        const meta = summaryCardMeta(card);
         const content = (
           <>
             <span style={summaryCardTop}>
               <span style={summaryLabel}>{card.label}</span>
-              <Badge tone={meta.badgeTone}>{meta.statusLabel}</Badge>
+              <strong style={summaryValue}>{card.value}</strong>
             </span>
-            <span style={summaryValueRow}>
-              <span style={{ ...summaryIcon, ...summaryIconTone(card.severity, card.unavailable) }}>{meta.icon}</span>
-              <strong style={card.unavailable ? summaryUnavailableValue : summaryValue}>{card.value}</strong>
-            </span>
-            <span style={summaryMetricList}>
-              {splitSummaryNote(card.note).map((part) => (
-                <small key={part} style={summaryNote}>{part}</small>
-              ))}
-            </span>
+            <span style={summaryDetail}>{card.detail ?? card.note}</span>
+            {card.metrics && (
+              <span style={summaryMetricList}>
+                {card.metrics.map((metric) => (
+                  <span key={metric.label} style={summaryMetric}>
+                    <span style={summaryMetricLabel}>{metric.label}</span>
+                    <strong style={summaryMetricValue}>{metric.value}</strong>
+                  </span>
+                ))}
+              </span>
+            )}
+            {card.progress && <SummaryProgress progress={card.progress} />}
           </>
         );
-        const style = { ...summaryCard, ...severityCardStyle(card.severity, card.unavailable) };
         return card.href ? (
-          <Link key={card.id} href={card.href} style={style}>
+          <Link key={card.id} href={card.href} style={summaryCard}>
             {content}
           </Link>
         ) : (
-          <div key={card.id} style={style}>
+          <div key={card.id} style={summaryCard}>
             {content}
           </div>
         );
       })}
     </section>
   );
+}
+
+function SummaryProgress({ progress }: { progress: NonNullable<DashboardSummaryCard["progress"]> }) {
+  const percent = boundedPercent(progress.value, progress.total);
+  return (
+    <span style={summaryProgressRow}>
+      <span style={summaryProgressLabel}>{progress.label}</span>
+      <span style={summaryTrack}>
+        <span style={{ ...summaryFill, width: `${percent}%`, background: progressToneColor(progress.tone) }} />
+      </span>
+      <span style={summaryProgressValue}>
+        {percent}% <span style={summaryProgressCount}>({progress.value}/{progress.total}명)</span>
+      </span>
+    </span>
+  );
+}
+
+function boundedPercent(value: number, total: number) {
+  if (total <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((value / total) * 100)));
+}
+
+function progressToneColor(tone: NonNullable<DashboardSummaryCard["progress"]>["tone"]) {
+  if (tone === "green") return "var(--asc-success)";
+  if (tone === "navy") return "var(--asc-accent)";
+  if (tone === "purple") return "#7c3aed";
+  return "var(--asc-info)";
 }
 
 function OperationsInboxPanel({
@@ -259,7 +198,6 @@ function OperationsInboxPanel({
   data,
   selectedId,
   onSelect,
-  onHide,
   activeFilterCount,
 }: {
   items: OperationsInboxItem[];
@@ -271,7 +209,6 @@ function OperationsInboxPanel({
   data: DashboardViewData;
   selectedId: string | null;
   onSelect: (id: string) => void;
-  onHide: (id: string) => void;
   activeFilterCount: number;
 }) {
   return (
@@ -322,7 +259,7 @@ function OperationsInboxPanel({
           <span>우선순위</span>
           <span>유형</span>
           <span>업무명</span>
-          <span>대상</span>
+          <span>정보</span>
           <span>담당자</span>
           <span>마감/기준</span>
           <span>상태</span>
@@ -337,7 +274,7 @@ function OperationsInboxPanel({
           </div>
         ) : (
           items.map((item) => (
-            <InboxListRow key={item.id} item={item} active={item.id === selectedId} onSelect={onSelect} onHide={onHide} />
+            <InboxListRow key={item.id} item={item} active={item.id === selectedId} onSelect={onSelect} />
           ))
         )}
       </div>
@@ -349,15 +286,11 @@ function InboxListRow({
   item,
   active,
   onSelect,
-  onHide,
 }: {
   item: OperationsInboxItem;
   active: boolean;
   onSelect: (id: string) => void;
-  onHide: (id: string) => void;
 }) {
-  const [hovered, setHovered] = useState(false);
-
   function openItem() {
     window.location.href = item.href;
   }
@@ -367,10 +300,6 @@ function InboxListRow({
       role="button"
       tabIndex={0}
       style={active ? activeQueueRow : queueRow}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onFocus={() => setHovered(true)}
-      onBlur={() => setHovered(false)}
       onClick={() => onSelect(item.id)}
       onDoubleClick={openItem}
       onKeyDown={(event) => {
@@ -391,18 +320,6 @@ function InboxListRow({
       <span style={queueMutedCell}>{item.ownerLabel}</span>
       <span style={item.timeLabel.includes("마감") ? queueDueCell : queueMutedCell}>{item.timeLabel}</span>
       <span style={queueStatusCell}>{item.statusLabel}</span>
-      <button
-        type="button"
-        style={{ ...queueHideButton, ...(hovered ? queueHideButtonVisible : {}) }}
-        onClick={(event) => {
-          event.stopPropagation();
-          onHide(item.id);
-        }}
-        aria-label={`${item.title} 운영 큐에서 숨김`}
-        title="운영 큐에서 숨김"
-      >
-        ×
-      </button>
     </div>
   );
 }
@@ -554,66 +471,6 @@ function ManagementNeededStudentsPanel({ students }: { students: ManagementStude
   );
 }
 
-function CommunicationWidget({ communication }: { communication: CommunicationWidgetData }) {
-  return (
-    <Widget title="문자/상담 확인" href="/messages">
-      {communication.items.length === 0 ? (
-        <CompactEmpty title="확인할 문자 항목이 없습니다." desc="실패, 대기, 차단된 발송 항목이 생기면 표시됩니다." />
-      ) : (
-        communication.items.map((item) => (
-          <WidgetLine key={item.id} title={item.title} meta={item.meta} href={item.href} severity={item.severity} status={item.statusLabel} />
-        ))
-      )}
-    </Widget>
-  );
-}
-
-function OmrScoreWidget({ omrScore }: { omrScore: OmrScoreWidgetData }) {
-  return (
-    <Widget title="시험/OMR 검토" href="/omr">
-      {omrScore.items.length === 0 ? (
-        <CompactEmpty title="검토할 OMR 항목이 없습니다." desc="인식 실패, 매칭 필요, 채점 검토 항목이 생기면 표시됩니다." />
-      ) : (
-        omrScore.items.map((item) => (
-          <WidgetLine key={item.id} title={item.title} meta={item.meta} href={item.href} severity={item.severity} status={item.statusLabel} />
-        ))
-      )}
-    </Widget>
-  );
-}
-
-function PaymentMaterialsWidget({ paymentMaterials }: { paymentMaterials: PaymentMaterialsWidgetData }) {
-  return (
-    <Widget title="미납/교재" href="/operations">
-      {paymentMaterials.status === "unavailable" ? (
-        <div style={unavailableBox}>
-          <Badge tone="yellow">데이터 연결 예정</Badge>
-          <strong>결제·교재 데이터 연결 예정</strong>
-          <p>수강료, 교재비, 교재 배부 상태는 결제/교재 모델 연결 후 표시됩니다.</p>
-        </div>
-      ) : (
-        paymentMaterials.items.map((item) => (
-          <WidgetLine key={item.id} title={item.studentName} meta={`${item.itemLabel} · ${item.statusLabel}`} href={item.href} severity="warning" status={item.dueText ?? "확인"} />
-        ))
-      )}
-    </Widget>
-  );
-}
-
-function RecentActivityPanel({ activities }: { activities: RecentActivityItem[] }) {
-  return (
-    <Widget title="최근 활동" href="/memos">
-      {activities.length === 0 ? (
-        <CompactEmpty title="최근 활동이 없습니다." desc="메모, 업무 댓글, 문자, OMR 기록이 표시됩니다." />
-      ) : (
-        activities.map((activity) => (
-          <WidgetLine key={activity.id} title={activity.title} meta={`${activity.label} · ${activity.meta}`} href={activity.href} severity={activity.severity} status={activity.label} />
-        ))
-      )}
-    </Widget>
-  );
-}
-
 function Widget({ title, href, children }: { title: string; href: string; children: ReactNode }) {
   return (
     <section style={widgetPanel}>
@@ -623,18 +480,6 @@ function Widget({ title, href, children }: { title: string; href: string; childr
       </div>
       <div style={widgetBody}>{children}</div>
     </section>
-  );
-}
-
-function WidgetLine({ title, meta, href, severity, status }: { title: string; meta: string; href: string; severity: DashboardSignalSeverity; status: string }) {
-  return (
-    <Link href={href} style={compactItem}>
-      <div style={compactMain}>
-        <strong style={itemTitle}>{title}</strong>
-        <span style={compactMeta}>{meta}</span>
-      </div>
-      <SeverityBadge severity={severity} label={status} />
-    </Link>
   );
 }
 
@@ -669,9 +514,7 @@ function TypeBadge({ type }: { type: DashboardSignalType }) {
 }
 
 function filterInboxItems(items: OperationsInboxItem[], filters: DashboardFilterState, tab: string, today: string) {
-  const query = filters.query.trim().toLowerCase();
   return items.filter((item) => {
-    if (query && !item.searchText.includes(query)) return false;
     if (filters.dateScope === "today" && item.dateScope !== "today" && item.dueKey !== today && item.dateKey !== today) return false;
     if (filters.dateScope === "week" && item.dateScope !== "today" && item.dateScope !== "week" && item.dateScope !== "recent") return false;
     if (filters.classGroupId !== "all" && item.classGroupId !== filters.classGroupId) return false;
@@ -686,9 +529,12 @@ function filterInboxItems(items: OperationsInboxItem[], filters: DashboardFilter
   }).sort((a, b) => DASHBOARD_SEVERITY_ORDER[a.severity] - DASHBOARD_SEVERITY_ORDER[b.severity] || Number(b.isMine) - Number(a.isMine));
 }
 
+function isTodayInboxItem(item: OperationsInboxItem, today: string) {
+  return item.dateScope === "today" || item.dueKey === today || item.dateKey === today;
+}
+
 function countActiveFilters(filters: DashboardFilterState) {
-  return Number(Boolean(filters.query.trim())) +
-    Number(filters.dateScope !== "all") +
+  return Number(filters.dateScope !== "all") +
     Number(filters.classGroupId !== "all") +
     Number(filters.ownerId !== "all") +
     Number(filters.signalType !== "all") +
@@ -703,57 +549,17 @@ function severityLabel(severity: DashboardSignalSeverity) {
   return "일반";
 }
 
-function severityCardStyle(severity?: DashboardSignalSeverity, unavailable?: boolean): CSSProperties {
-  if (unavailable) return { border: "1px solid transparent", background: "var(--asc-bg-subtle)" };
-  if (severity === "critical") return { border: "1px solid transparent", background: "var(--asc-danger-soft)" };
-  if (severity === "warning") return { border: "1px solid transparent", background: "var(--asc-warning-soft)" };
-  if (severity === "success") return { border: "1px solid transparent", background: "var(--asc-success-soft)" };
-  return {};
-}
-
-function summaryCardMeta(card: DashboardSummaryCard): { icon: string; statusLabel: string; badgeTone: DashboardBadgeTone } {
-  const iconById: Record<string, string> = {
-    todayClasses: "수업",
-    urgent: "긴급",
-    attentionStudents: "학생",
-    messages: "문자",
-    paymentMaterials: "납부",
-    omr: "OMR",
-  };
-  if (card.unavailable) return { icon: iconById[card.id] ?? "운영", statusLabel: "예정", badgeTone: "gray" };
-  if (card.severity === "critical") return { icon: iconById[card.id] ?? "긴급", statusLabel: "긴급", badgeTone: "red" };
-  if (card.severity === "warning") return { icon: iconById[card.id] ?? "주의", statusLabel: "주의", badgeTone: "yellow" };
-  if (card.severity === "success") return { icon: iconById[card.id] ?? "정상", statusLabel: "정상", badgeTone: "green" };
-  return { icon: iconById[card.id] ?? "운영", statusLabel: "확인", badgeTone: "blue" };
-}
-
-function splitSummaryNote(note: string) {
-  return note.split("·").map((part) => part.trim()).filter(Boolean).slice(0, 2);
-}
-
-function summaryIconTone(severity?: DashboardSignalSeverity, unavailable?: boolean): CSSProperties {
-  if (unavailable) return { background: "var(--asc-surface)", color: "var(--asc-text-muted)" };
-  if (severity === "critical") return { background: "var(--asc-danger-soft)", color: "var(--asc-danger)" };
-  if (severity === "warning") return { background: "var(--asc-warning-soft)", color: "var(--asc-warning-text)" };
-  if (severity === "success") return { background: "var(--asc-success-soft)", color: "var(--asc-success)" };
-  return { background: "var(--asc-info-soft)", color: "var(--asc-info)" };
-}
-
-function filterOptionLabel(options: DashboardFilterOption[], value: string) {
-  return options.find((option) => option.value === value)?.label ?? value;
-}
-
 function detailDecision(item: OperationsInboxItem) {
   const typeLabel = DASHBOARD_SIGNAL_LABELS[item.type];
   if (item.severity === "critical") {
     return {
-      title: "즉시 처리 대상",
+      title: "즉시 처리 정보",
       description: `${typeLabel} 신호가 긴급 상태입니다. 담당자와 기준 시간을 먼저 확인하고 바로 액션으로 이동하세요.`,
     };
   }
   if (item.severity === "warning") {
     return {
-      title: "오늘 확인 대상",
+      title: "오늘 확인 정보",
       description: `${typeLabel} 신호가 운영 흐름을 막을 수 있습니다. 맥락 확인 후 담당 액션을 실행하세요.`,
     };
   }
@@ -786,21 +592,22 @@ const scopeItem: CSSProperties = { minHeight: 26, display: "inline-flex", alignI
 const scopeLabel: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 11, fontWeight: 850 };
 const scopeValue: CSSProperties = { color: "var(--asc-text)", fontSize: 12, fontWeight: 950 };
 const scopeUpdated: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 11, fontWeight: 850, whiteSpace: "nowrap" };
-const filterPanel: CSSProperties = { background: "var(--asc-surface)", border: surfaceBorder, borderRadius: 8, padding: 8, display: "grid", gap: 6, boxShadow: "var(--asc-shadow-sm)" };
-const filterFields: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(220px, 1.5fr) minmax(112px, .55fr) minmax(150px, .8fr) 84px", gap: 8, alignItems: "center" };
-const filterControl: CSSProperties = { minHeight: 32, padding: "5px 9px", fontSize: 12 };
-const filterResetButton: CSSProperties = { minHeight: 32, padding: "0 10px", fontSize: 12 };
-const activeFilters: CSSProperties = { display: "flex", flexWrap: "wrap", gap: 5 };
-const summaryGrid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(6, minmax(124px, 1fr))", gap: 8 };
-const summaryCard: CSSProperties = { border: surfaceBorder, borderRadius: 8, padding: "8px 9px", background: "var(--asc-surface)", display: "flex", flexDirection: "column", gap: 5, minHeight: 74, color: "var(--asc-text)", textDecoration: "none", boxShadow: "var(--asc-shadow-sm)" };
+const summaryGrid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(190px, 1fr))", gap: 8 };
+const summaryCard: CSSProperties = { border: surfaceBorder, borderRadius: 8, padding: "10px 11px", background: "var(--asc-surface)", display: "flex", flexDirection: "column", gap: 8, minHeight: 112, color: "var(--asc-text)", textDecoration: "none", boxShadow: "var(--asc-shadow-sm)" };
 const summaryCardTop: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 };
-const summaryIcon: CSSProperties = { minWidth: 28, height: 28, borderRadius: 7, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 950 };
 const summaryLabel: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 11, fontWeight: 950 };
-const summaryValueRow: CSSProperties = { display: "flex", alignItems: "center", gap: 7, minWidth: 0 };
-const summaryValue: CSSProperties = { fontSize: 19, lineHeight: 1.05 };
-const summaryUnavailableValue: CSSProperties = { fontSize: 13, lineHeight: 1.15 };
-const summaryMetricList: CSSProperties = { display: "flex", flexWrap: "wrap", gap: 4, maxHeight: 15, overflow: "hidden" };
-const summaryNote: CSSProperties = { color: "var(--asc-text-subtle)", fontSize: 10, fontWeight: 800, lineHeight: 1.2, whiteSpace: "nowrap" };
+const summaryValue: CSSProperties = { color: "var(--asc-text)", fontSize: 17, lineHeight: 1.05 };
+const summaryDetail: CSSProperties = { color: "var(--asc-text-subtle)", fontSize: 12, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+const summaryMetricList: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6 };
+const summaryMetric: CSSProperties = { display: "grid", gap: 2, minWidth: 0, padding: "6px 7px", borderRadius: 6, background: "var(--asc-bg-subtle)" };
+const summaryMetricLabel: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 10, fontWeight: 850, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
+const summaryMetricValue: CSSProperties = { color: "var(--asc-text)", fontSize: 13, fontWeight: 950, whiteSpace: "nowrap" };
+const summaryProgressRow: CSSProperties = { display: "grid", gridTemplateColumns: "74px minmax(72px, 1fr) auto", gap: 8, alignItems: "center", marginTop: "auto" };
+const summaryProgressLabel: CSSProperties = { color: "var(--asc-text)", fontSize: 11, fontWeight: 950, whiteSpace: "nowrap" };
+const summaryTrack: CSSProperties = { height: 5, borderRadius: 999, background: "var(--asc-border-subtle)", overflow: "hidden" };
+const summaryFill: CSSProperties = { display: "block", height: "100%", borderRadius: 999 };
+const summaryProgressValue: CSSProperties = { color: "var(--asc-text)", fontSize: 12, fontWeight: 950, whiteSpace: "nowrap" };
+const summaryProgressCount: CSSProperties = { color: "var(--asc-text-muted)", fontWeight: 850 };
 const mainGrid: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(720px, 1fr) minmax(330px, 370px)", gap: 10, alignItems: "start" };
 const panel: CSSProperties = { background: "var(--asc-surface)", border: surfaceBorder, borderRadius: 8, padding: 10, display: "grid", gap: 8, boxShadow: "var(--asc-shadow-sm)" };
 const panelHeader: CSSProperties = { display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" };
@@ -812,13 +619,11 @@ const tabButton: CSSProperties = { border: "1px solid transparent", borderRadius
 const activeTabButton: CSSProperties = { ...tabButton, background: "var(--asc-toggle-active-bg)", color: "var(--asc-toggle-active-text)" };
 const queueFilters: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(96px, 1fr))", gap: 6, minWidth: 330 };
 const queueSelect: CSSProperties = { minHeight: 30, padding: "5px 8px", fontSize: 12 };
-const queueColumns = "86px 64px minmax(170px, 1.25fr) minmax(124px, .85fr) minmax(70px, .55fr) minmax(90px, .65fr) minmax(70px, .5fr)";
+const queueColumns = "86px 64px minmax(220px, 1.3fr) minmax(150px, .9fr) minmax(86px, .55fr) minmax(96px, .6fr) minmax(76px, .45fr)";
 const inboxList: CSSProperties = { border: surfaceBorder, borderRadius: 8, overflow: "auto", maxHeight: 470, background: "var(--asc-surface)", boxShadow: "var(--asc-shadow-sm)" };
 const queueHead: CSSProperties = { display: "grid", gridTemplateColumns: queueColumns, alignItems: "center", minWidth: 760, position: "sticky", top: 0, zIndex: 1, background: "var(--asc-bg-subtle)", borderBottom: "1px solid var(--asc-row-divider)", color: "var(--asc-text-muted)", fontSize: 11, fontWeight: 950, padding: "7px 10px" };
-const queueRow: CSSProperties = { position: "relative", width: "100%", minWidth: 760, minHeight: 42, display: "grid", gridTemplateColumns: queueColumns, alignItems: "center", borderWidth: 0, borderBottomWidth: 1, borderBottomStyle: "solid", borderBottomColor: "var(--asc-row-divider)", background: "var(--asc-surface)", color: "var(--asc-text)", padding: "8px 38px 8px 10px", textAlign: "left", cursor: "pointer", font: "inherit" };
+const queueRow: CSSProperties = { position: "relative", width: "100%", minWidth: 760, minHeight: 42, display: "grid", gridTemplateColumns: queueColumns, alignItems: "center", borderWidth: 0, borderBottomWidth: 1, borderBottomStyle: "solid", borderBottomColor: "var(--asc-row-divider)", background: "var(--asc-surface)", color: "var(--asc-text)", padding: "8px 10px", textAlign: "left", cursor: "pointer", font: "inherit" };
 const activeQueueRow: CSSProperties = { ...queueRow, background: "var(--asc-accent-soft)", boxShadow: "inset 3px 0 0 var(--asc-accent)" };
-const queueHideButton: CSSProperties = { position: "absolute", right: 8, width: 22, height: 22, display: "grid", placeItems: "center", border: 0, borderRadius: 4, background: "var(--asc-danger-soft)", color: "var(--asc-danger)", fontSize: 16, fontWeight: 950, lineHeight: 1, cursor: "pointer", opacity: 0, pointerEvents: "none" };
-const queueHideButtonVisible: CSSProperties = { opacity: 1, pointerEvents: "auto" };
 const inboxEmpty: CSSProperties = { padding: 12 };
 const queuePriorityCell: CSSProperties = { minWidth: 0, display: "flex", alignItems: "center" };
 const queueTypeCell: CSSProperties = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--asc-text-subtle)", fontSize: 12, fontWeight: 950 };
@@ -859,4 +664,3 @@ const itemTitle: CSSProperties = { color: "var(--asc-text)" };
 const itemTitleLink: CSSProperties = { ...itemTitle, textDecoration: "none" };
 const compactMeta: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 11, fontWeight: 800, lineHeight: 1.35 };
 const compactEmpty: CSSProperties = { border: "1px dashed var(--asc-border)", borderRadius: 8, padding: 10, display: "grid", gap: 4, color: "var(--asc-text-muted)", background: "var(--asc-bg-subtle)" };
-const unavailableBox: CSSProperties = { border: "1px dashed var(--asc-border)", borderRadius: 8, padding: 10, display: "grid", gap: 6, background: "var(--asc-bg-subtle)" };

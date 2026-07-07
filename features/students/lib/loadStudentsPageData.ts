@@ -14,6 +14,9 @@ export type StudentsPageSearchParams = {
   classGroupId?: string;
   classGroupIds?: string;
   testId?: string;
+  quick?: string;
+  quickLessonId?: string;
+  quickLessonPosition?: string;
 };
 
 export const ALL_TESTS_OPTION_ID = "all-tests";
@@ -25,6 +28,10 @@ export async function loadStudentsPageData(searchParams?: StudentsPageSearchPara
   const requestedClassGroupId = cleanFilter(sp.classGroupId);
   const requestedClassGroupIds = cleanFilterList(sp.classGroupIds);
   const requestedTestId = cleanFilter(sp.testId);
+  const quickMode: "attendance" | "assignment" | null = sp.quick === "attendance" || sp.quick === "assignment" ? sp.quick : null;
+  const quickLessonId = cleanFilter(sp.quickLessonId);
+  const quickLessonPositionValue = Number(sp.quickLessonPosition);
+  const quickLessonPosition = Number.isInteger(quickLessonPositionValue) && quickLessonPositionValue > 0 ? quickLessonPositionValue : null;
   const explicitAllClasses = sp.classGroupId === "all";
 
   const [classGroups, optionSettings, customSettings, uploadStudents] = await Promise.all([
@@ -292,7 +299,11 @@ export async function loadStudentsPageData(searchParams?: StudentsPageSearchPara
     })),
     testOptions,
     selectedTestExamId,
-    canUploadStudents: user.role === "ADMIN" || user.role === "MANAGER" || user.role === "TEACHER",
+    quickDate: date,
+    quickLessonId,
+    quickLessonPosition,
+    quickMode,
+    canUploadStudents: user.role === "ADMIN" || user.role === "MANAGER" || user.role === "TEACHER" || user.role === "ASSISTANT",
   };
 }
 

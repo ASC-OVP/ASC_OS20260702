@@ -17,27 +17,6 @@ export function studentWhereForUser(user: ScopedUser): Prisma.StudentWhereInput 
     };
   }
 
-  if (user.role === "ASSISTANT") {
-    return {
-      academyId: user.academyId,
-      OR: [
-        { assistantId: user.id },
-        {
-          studentClasses: {
-            some: {
-              classGroup: {
-                OR: [
-                  { assistantId: user.id },
-                  { classAssistants: { some: { assistantId: user.id } } },
-                ],
-              },
-            },
-          },
-        },
-      ],
-    };
-  }
-
   return { academyId: user.academyId };
 }
 

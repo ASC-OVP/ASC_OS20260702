@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { surfaceBorder } from "@/lib/styles";
 import type { AssistantWorkShift, User } from "@prisma/client";
 import WorkConfirmSubmit from "@/features/work/components/WorkConfirmSubmit";
+import WorkShiftFormModal from "@/features/work/components/WorkShiftFormModal";
 import { deleteWorkShiftAction, saveAssistantWorkNoteAction, saveWorkShiftAction, updatePayrollSettlementAction } from "@/features/work/actions/workShiftActions";
 import { getPayrollSettlements, isPayrollClosed, payrollSettlementKey, type PayrollSettlementRecord, type PayrollSettlements } from "@/features/work/lib/workPay";
 
@@ -317,40 +318,52 @@ export default async function WorkPage({ searchParams }: Props = {}) {
                     <span style={payrollBadgeStyle(selectedSettlement)}>{selectedClosed ? "마감 월" : "수정 가능"}</span>
                   </div>
 
-                  {selectedShift ? (
-                    <section style={detailPane}>
-                      <div style={detailTitleRow}>
-                        <span style={statusBadge(selectedShift.status)}>{shiftStatusText(selectedShift.status)}</span>
-                        <Link href={workHref({ assistantId: selectedAssistantId, month, date: selectedDate, managerView })} style={smallLink}>
-                          새 근무
-                        </Link>
-                      </div>
-                      <ShiftForm
-                        key={selectedShift.id}
-                        shift={selectedShift}
-                        assistantId={selectedAssistantId}
-                        isClosed={selectedClosed}
-                      />
-                      <form action={deleteWorkShiftAction} style={closedEditBox}>
-                        <input type="hidden" name="shiftId" value={selectedShift.id} />
-                        {selectedClosed && (
-                          <label style={label}>마감 후 삭제 사유
-                            <input name="editReason" required placeholder="삭제 사유를 입력해야 합니다." style={input} />
-                          </label>
-                        )}
-                        <WorkConfirmSubmit message={`${selectedAssistant.name}의 ${selectedShift.workDate} 근무 기록을 삭제할까요?`} style={dangerButton}>
-                          근무 기록 삭제
-                        </WorkConfirmSubmit>
-                      </form>
-                    </section>
-                  ) : (
-                    <ShiftForm
-                      key={`${selectedAssistantId}:${selectedDate}:new`}
-                      assistantId={selectedAssistantId}
-                      defaultDate={selectedDate}
-                      isClosed={selectedClosed}
-                    />
-                  )}
+                  <div style={workActionRow}>
+                    <WorkShiftFormModal
+                      key={selectedShift?.id ?? `${selectedAssistantId}:${selectedDate}:new`}
+                      title={selectedShift ? "근무 수정" : "근무 작성"}
+                      triggerLabel={selectedShift ? "근무 수정" : "근무 작성"}
+                      defaultOpen={Boolean(selectedShift)}
+                    >
+                      {selectedShift ? (
+                        <>
+                          <div style={detailTitleRow}>
+                            <span style={statusBadge(selectedShift.status)}>{shiftStatusText(selectedShift.status)}</span>
+                            <span style={softText}>{selectedShift.workDate} · {selectedShift.startTime} ~ {selectedShift.endTime}</span>
+                          </div>
+                          <ShiftForm
+                            key={selectedShift.id}
+                            shift={selectedShift}
+                            assistantId={selectedAssistantId}
+                            isClosed={selectedClosed}
+                          />
+                          <form action={deleteWorkShiftAction} style={closedEditBox}>
+                            <input type="hidden" name="shiftId" value={selectedShift.id} />
+                            {selectedClosed && (
+                              <label style={label}>마감 후 삭제 사유
+                                <input name="editReason" required placeholder="삭제 사유를 입력해야 합니다." style={input} />
+                              </label>
+                            )}
+                            <WorkConfirmSubmit message={`${selectedAssistant.name}의 ${selectedShift.workDate} 근무 기록을 삭제할까요?`} style={dangerButton}>
+                              근무 기록 삭제
+                            </WorkConfirmSubmit>
+                          </form>
+                        </>
+                      ) : (
+                        <ShiftForm
+                          key={`${selectedAssistantId}:${selectedDate}:new`}
+                          assistantId={selectedAssistantId}
+                          defaultDate={selectedDate}
+                          isClosed={selectedClosed}
+                        />
+                      )}
+                    </WorkShiftFormModal>
+                    {selectedShift && (
+                      <Link href={workHref({ assistantId: selectedAssistantId, month, date: selectedDate, managerView })} style={smallGhostLink}>
+                        새 근무
+                      </Link>
+                    )}
+                  </div>
 
                   <div style={dayShiftList}>
                     <h3 style={smallSectionTitle}>선택일 근무 내역</h3>
@@ -362,7 +375,7 @@ export default async function WorkPage({ searchParams }: Props = {}) {
                           <span>{formatWon(shiftPay(shift))}원</span>
                         </div>
                         <Link href={workHref({ assistantId: selectedAssistantId, month, date: shift.workDate, shiftId: shift.id, managerView })} style={detailButton}>
-                          상세
+                          수정
                         </Link>
                       </div>
                     ))}
@@ -556,19 +569,12 @@ function ShiftForm({ assistantId, defaultDate, shift, isClosed }: { assistantId:
     <form action={saveWorkShiftAction} style={shiftForm}>
       {shift && <input type="hidden" name="shiftId" value={shift.id} />}
       <input type="hidden" name="assistantId" value={assistantId} />
+      <input type="hidden" name="breakMinutes" value={shift?.breakMinutes ?? 0} />
+      <input type="hidden" name="status" value={shift?.status ?? "SCHEDULED"} />
       <label style={label}>근무일<input name="workDate" type="date" required defaultValue={shift?.workDate ?? defaultDate ?? ""} style={input} /></label>
       <label style={label}>출근 시간<input name="startTime" type="time" required defaultValue={shift?.startTime ?? "14:00"} style={input} /></label>
       <label style={label}>퇴근 시간<input name="endTime" type="time" required defaultValue={shift?.endTime ?? "18:00"} style={input} /></label>
-      <label style={label}>휴게(분)<input name="breakMinutes" type="number" min={0} defaultValue={shift?.breakMinutes ?? 0} style={input} /></label>
       <label style={label}>시급<input name="hourlyWage" type="number" min={0} defaultValue={shift?.hourlyWage ?? 0} style={input} /></label>
-      <label style={label}>상태
-        <select name="status" defaultValue={shift?.status ?? "SCHEDULED"} style={input}>
-          <option value="SCHEDULED">예정/미확정</option>
-          <option value="WORKED">근무 완료</option>
-          <option value="ABSENT">결근</option>
-          <option value="CANCELLED">취소</option>
-        </select>
-      </label>
       <label style={{ ...label, gridColumn: "1 / -1" }}>메모
         <input name="memo" defaultValue={shift?.memo ?? ""} style={input} />
       </label>
@@ -930,7 +936,7 @@ const dayShiftList: CSSProperties = { display: "grid", gap: 6, marginTop: 8 };
 const dayShiftItem: CSSProperties = { border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", padding: 7, background: "var(--asc-bg-subtle)", display: "grid", gap: 6 };
 const dayShiftSummary: CSSProperties = { display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 6, alignItems: "center" };
 const smallSectionTitle: CSSProperties = { margin: 0, fontSize: 14, fontWeight: 950 };
-const detailPane: CSSProperties = { display: "grid", gap: 8, border: "1px solid transparent", background: "var(--asc-primary-soft)", borderRadius: "var(--asc-radius-md)", padding: 9 };
+const workActionRow: CSSProperties = { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" };
 const detailTitleRow: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 };
 const detailButton: CSSProperties = { height: 30, display: "inline-grid", placeItems: "center", border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-surface)", color: "var(--asc-text)", textDecoration: "none", fontSize: 12, fontWeight: 950 };
 const shiftForm: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8, alignItems: "end" };

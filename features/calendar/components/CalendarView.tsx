@@ -96,7 +96,7 @@ export default async function CalendarPage() {
 
   const classEvents = classGroupsWithRoom.flatMap((classGroup) => classEventsFromClassGroup(classGroup));
   const taskEvents = tasksWithStartDate.map((task) => taskEvent(task));
-  const workShiftEvents = workShifts.map((shift) => workShiftEvent(shift));
+  const workShiftEvents = workShiftEventsByDate(workShifts);
   const activeClassCount = classGroups.filter((classGroup) => effectiveClassStatus(classGroup) === "ACTIVE").length;
 
   return (
@@ -175,7 +175,7 @@ function classEventsFromClassGroup(classGroup: {
 
   const status = statusFromClass(effectiveStatus);
   const severity = severityFromClass(status);
-  const daysOfWeek = parseClassDaysOfWeek(classGroup.daysOfWeek);
+  const daysOfWeek = parseClassDaysOfWeek(`${classGroup.daysOfWeek ?? ""} ${classGroup.schedule ?? ""}`);
   const assistantNames =
     classGroup.classAssistants.length > 0
       ? classGroup.classAssistants.map((link) => link.assistant.name).join(", ")
@@ -213,6 +213,32 @@ function classEventsFromClassGroup(classGroup: {
     },
   };
 
+  if (daysOfWeek.length > 0) {
+    const startTime = classGroup.startTime || "09:00";
+    const startRecur = classGroup.startDate || isoDate(addDays(new Date(), -120));
+    const endRecur = classGroup.endDate || isoDate(addDays(new Date(), 240));
+    const id = `class-${classGroup.id}`;
+
+    return [
+      {
+        ...common,
+        id,
+        occurrenceKey: id,
+        title: classGroup.name,
+        startAt: `${startRecur}T${startTime}`,
+        endAt: classGroup.endTime ? `${startRecur}T${classGroup.endTime}` : undefined,
+        isAllDay: false,
+        isRecurring: true,
+        recurrenceLabelKo: `${formatClassSchedule(classGroup)} · ${formatOperatingPeriod(classGroup)}`,
+        repeatDaysOfWeek: daysOfWeek,
+        startRecur,
+        endRecur,
+        startTime,
+        endTime: classGroup.endTime || undefined,
+      },
+    ];
+  }
+
   const savedLessons = classGroup.lessons.filter((lesson) => lesson.lessonDate);
   if (savedLessons.length > 0) {
     return savedLessons.map((lesson) => {
@@ -240,31 +266,7 @@ function classEventsFromClassGroup(classGroup: {
     });
   }
 
-  if (daysOfWeek.length === 0) return [];
-
-  const startTime = classGroup.startTime || "09:00";
-  const startRecur = classGroup.startDate || isoDate(addDays(new Date(), -120));
-  const endRecur = classGroup.endDate || isoDate(addDays(new Date(), 240));
-  const id = `class-${classGroup.id}`;
-
-  return [
-    {
-      ...common,
-      id,
-      occurrenceKey: id,
-      title: classGroup.name,
-      startAt: `${startRecur}T${startTime}`,
-      endAt: classGroup.endTime ? `${startRecur}T${classGroup.endTime}` : undefined,
-      isAllDay: false,
-      isRecurring: true,
-      recurrenceLabelKo: `${formatClassSchedule(classGroup)} · ${formatOperatingPeriod(classGroup)}`,
-      repeatDaysOfWeek: daysOfWeek,
-      startRecur,
-      endRecur,
-      startTime,
-      endTime: classGroup.endTime || undefined,
-    },
-  ];
+  return [];
 }
 
 function taskEvent(task: {
@@ -322,7 +324,7 @@ function taskEvent(task: {
   };
 }
 
-function workShiftEvent(shift: {
+type CalendarWorkShift = {
   id: string;
   assistantId: string;
   workDate: string;
@@ -331,30 +333,60 @@ function workShiftEvent(shift: {
   status: string;
   memo: string | null;
   assistant: { id: string; name: string };
-}): AcademyCalendarEvent {
-  const status = workShiftStatus(shift.status);
+};
+
+function workShiftEventsByDate(shifts: CalendarWorkShift[]): AcademyCalendarEvent[] {
+  const shiftsByDate = new Map<string, CalendarWorkShift[]>();
+
+  for (const shift of shifts) {
+    const list = shiftsByDate.get(shift.workDate) ?? [];
+    list.push(shift);
+    shiftsByDate.set(shift.workDate, list);
+  }
+
+  return [...shiftsByDate.entries()].map(([date, dateShifts]) => groupedWorkShiftEvent(date, dateShifts));
+}
+
+function groupedWorkShiftEvent(date: string, shifts: CalendarWorkShift[]): AcademyCalendarEvent {
+  const orderedShifts = [...shifts].sort((a, b) => a.startTime.localeCompare(b.startTime) || a.assistant.name.localeCompare(b.assistant.name, "ko-KR"));
+  const names = orderedShifts.map((shift) => shift.assistant.name);
+  const startTime = orderedShifts[0]?.startTime ?? "09:00";
+  const endTime = orderedShifts.reduce((latest, shift) => (shift.endTime > latest ? shift.endTime : latest), orderedShifts[0]?.endTime ?? startTime);
+  const statuses = orderedShifts.map((shift) => workShiftStatus(shift.status));
+  const status = statuses.includes("delayed")
+    ? "delayed"
+    : statuses.includes("scheduled")
+      ? "scheduled"
+      : statuses.includes("cancelled")
+        ? "cancelled"
+        : "completed";
+  const statusLabels = [...new Set(orderedShifts.map((shift) => workShiftStatusLabel(shift.status)))].join(", ");
+  const memo = orderedShifts.map((shift) => shift.memo?.trim()).filter(Boolean).join("\n");
+  const shiftIds = orderedShifts.map((shift) => shift.id);
 
   return {
-    id: `work-shift-${shift.id}`,
-    sourceKey: shift.id,
-    occurrenceKey: `work-shift-${shift.id}`,
+    id: `work-shift-${date}`,
+    sourceKey: date,
+    occurrenceKey: `work-shift-${date}`,
     source: "assistant_work_shift",
     status,
     severity: workShiftSeverity(status),
-    title: `${shift.assistant.name} 출근`,
-    subtitle: `${shift.startTime}-${shift.endTime}`,
-    description: shift.memo,
-    startAt: `${shift.workDate}T${shift.startTime}`,
-    endAt: `${shift.workDate}T${shift.endTime}`,
+    title: `${names.join(", ")} 출근`,
+    subtitle: `${startTime}-${endTime}`,
+    description: memo || null,
+    startAt: `${date}T${startTime}`,
+    endAt: `${date}T${endTime}`,
     isAllDay: false,
-    ownerLabel: shift.assistant.name,
-    ownerIds: [shift.assistantId],
-    assistantId: shift.assistantId,
-    workShiftId: shift.id,
-    sourceStatusRaw: shift.status,
+    ownerLabel: names.join(", "),
+    ownerIds: uniqueIds(orderedShifts.map((shift) => shift.assistantId)),
+    assistantId: orderedShifts[0]?.assistantId ?? null,
+    workShiftId: shiftIds[0],
+    sourceStatusRaw: statusLabels,
     metadata: {
-      workStatusLabel: workShiftStatusLabel(shift.status),
-      scheduleText: `${shift.workDate} ${shift.startTime}-${shift.endTime}`,
+      workStatusLabel: statusLabels,
+      scheduleText: `${date} ${startTime}-${endTime}`,
+      shiftCount: orderedShifts.length,
+      shiftIds: shiftIds.join(","),
     },
   };
 }

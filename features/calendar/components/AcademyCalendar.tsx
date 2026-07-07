@@ -38,7 +38,7 @@ export default function AcademyCalendar({
   currentUserId,
 }: Props) {
   const [filters, setFilters] = useState<CalendarFilterValue>(() => defaultCalendarFilters());
-  const [viewMode, setViewMode] = useState<CalendarViewMode>("week");
+  const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
   const [displayMode, setDisplayMode] = useState<CalendarDisplayMode>("calendar");
   const [cursorDate, setCursorDate] = useState(() => stripTime(new Date()));
   const [selectedEvent, setSelectedEvent] = useState<MaterializedCalendarEvent | null>(null);
@@ -82,6 +82,14 @@ export default function AcademyCalendar({
   }
 
   function openDate(dateKey: string) {
+    setSelectedDate(dateKey);
+    setSelectedEvent(null);
+  }
+
+  function openDateInDayView(dateKey: string) {
+    setCursorDate(stripTime(new Date(`${dateKey}T00:00:00`)));
+    setViewMode("day");
+    setDisplayMode("calendar");
     setSelectedDate(dateKey);
     setSelectedEvent(null);
   }
@@ -168,6 +176,7 @@ export default function AcademyCalendar({
               hasDateMemo={(dateKey) => canShowPrivateMemos && filters.contentTypes.includes("private_memo") && memoByDate.has(dateKey)}
               hasEventMemo={(eventKey) => eventMemoByKey.has(eventKey)}
               onDateSelect={openDate}
+              onDateExpand={openDateInDayView}
               onEventSelect={openEvent}
             />
           </div>

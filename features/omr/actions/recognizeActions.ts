@@ -7,11 +7,13 @@ import { recordActivity } from "@/lib/activityLog";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { omrHref, text } from "@/features/omr/lib/omrForm";
+import { canManageExamForUser } from "@/features/omr/lib/omrPermissions";
 import { recognizeOmrUploadInternal } from "@/features/omr/lib/omrRecognitionRunner";
 import { OMR_UPLOAD_STATUSES } from "@/features/omr/lib/omrStatus";
 
 export async function recognizeOmrAction(formData: FormData) {
   const user = await requireUser();
+  if (!(await canManageExamForUser(user))) return;
   const uploadId = text(formData, "uploadId");
   if (!uploadId) return;
 
@@ -31,6 +33,7 @@ export async function recognizeOmrAction(formData: FormData) {
 
 export async function recognizeSelectedOmrUploadsAction(formData: FormData) {
   const user = await requireUser();
+  if (!(await canManageExamForUser(user))) return;
   const examId = text(formData, "examId");
   const scope = text(formData, "scope") || "all";
   const selectedIds = formData.getAll("uploadIds").map((value) => String(value)).filter(Boolean);

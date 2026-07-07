@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { createMessageTemplateAction, deleteMessageTemplateAction, updateMessageTemplateAction } from "@/features/messages/actions/messageActions";
+import { deleteMessageTemplateAction, updateMessageTemplateAction } from "@/features/messages/actions/messageActions";
+import type { MessageClassGroupOption, MessageExamOption } from "@/features/messages/components/MessageComposer";
+import MessageTemplateCreateModal from "@/features/messages/components/MessageTemplateCreateModal";
 import { renderMessageTemplate } from "@/lib/sms/renderTemplate";
 import { messageCategories, messageTargetTypes } from "@/lib/sms/types";
 
@@ -19,6 +21,8 @@ export type MessageTemplateRow = {
 
 type Props = {
   templates: MessageTemplateRow[];
+  classGroups: MessageClassGroupOption[];
+  exams: MessageExamOption[];
   selectedCategory?: string;
   canManage: boolean;
   academyName: string;
@@ -36,7 +40,7 @@ const sampleContext = {
   academyPhone: "",
 };
 
-export default function MessageTemplateManager({ templates, selectedCategory = "all", canManage, academyName }: Props) {
+export default function MessageTemplateManager({ templates, classGroups, exams, selectedCategory = "all", canManage, academyName }: Props) {
   const visibleTemplates = selectedCategory === "all" ? templates : templates.filter((template) => template.category === selectedCategory);
 
   return (
@@ -46,6 +50,7 @@ export default function MessageTemplateManager({ templates, selectedCategory = "
           <h2 style={title}>템플릿</h2>
           <p style={desc}>운영 문자와 광고성 문자 템플릿을 분리해서 관리합니다.</p>
         </div>
+        {canManage && <MessageTemplateCreateModal classGroups={classGroups} exams={exams} />}
       </div>
 
       <div style={filterRow}>
@@ -56,32 +61,6 @@ export default function MessageTemplateManager({ templates, selectedCategory = "
           </Link>
         ))}
       </div>
-
-      {canManage && (
-        <section style={panel}>
-          <h3 style={sectionTitle}>템플릿 생성</h3>
-          <form action={createMessageTemplateAction} style={formGrid}>
-            <input name="name" placeholder="템플릿명" required style={input} />
-            <input name="title" placeholder="발송 제목" style={input} />
-            <select name="category" defaultValue="ATTENDANCE" style={input}>
-              {messageCategories.map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}
-            </select>
-            <select name="targetType" defaultValue="GUARDIAN" style={input}>
-              {messageTargetTypes.map((targetType) => <option key={targetType.value} value={targetType.value}>{targetType.label}</option>)}
-            </select>
-            <label style={checkLabel}>
-              <input type="checkbox" name="isActive" defaultChecked />
-              사용
-            </label>
-            <label style={checkLabel}>
-              <input type="checkbox" name="isMarketing" />
-              광고
-            </label>
-            <textarea name="body" required rows={4} placeholder="[ASC학원]\n{{studentName}} 학생 보호자님, ..." style={textarea} />
-            <button style={primaryButton}>생성</button>
-          </form>
-        </section>
-      )}
 
       <section style={panel}>
         <h3 style={sectionTitle}>템플릿 목록</h3>
@@ -173,12 +152,10 @@ const desc: CSSProperties = { margin: "4px 0 0", color: "var(--asc-text-muted)",
 const filterRow: CSSProperties = { display: "flex", gap: 7, flexWrap: "wrap" };
 const panel: CSSProperties = { border: "1px solid transparent", borderRadius: "var(--asc-radius-lg)", background: "var(--asc-surface)", padding: 10, display: "grid", gap: 9, boxShadow: "var(--asc-shadow-sm)" };
 const sectionTitle: CSSProperties = { margin: 0, fontSize: 16, fontWeight: 950 };
-const formGrid: CSSProperties = { display: "grid", gridTemplateColumns: "1.1fr 1fr 140px 140px 88px", gap: 8, alignItems: "start" };
 const editGrid: CSSProperties = { display: "grid", gridTemplateColumns: "1.1fr 1fr 140px 140px 88px", gap: 8, marginTop: 8 };
 const input: CSSProperties = { height: 36, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", padding: "0 10px", color: "var(--asc-text)" };
 const textarea: CSSProperties = { gridColumn: "1 / -1", border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", padding: 10, color: "var(--asc-text)", resize: "vertical", lineHeight: 1.45 };
 const checkLabel: CSSProperties = { height: 36, display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 900 };
-const primaryButton: CSSProperties = { height: 36, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-primary)", color: "#fff", fontWeight: 950 };
 const list: CSSProperties = { display: "grid", gap: 8 };
 const item: CSSProperties = { border: "1px solid transparent", borderRadius: "var(--asc-radius-lg)", background: "var(--asc-bg-subtle)", padding: 10 };
 const summary: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, cursor: "pointer" };
@@ -191,6 +168,4 @@ const rowActions: CSSProperties = { gridColumn: "1 / -1", display: "flex", gap: 
 const lightButton: CSSProperties = { height: 34, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", color: "var(--asc-text)", padding: "0 12px", fontWeight: 950 };
 const dangerButton: CSSProperties = { ...lightButton, background: "var(--asc-danger-soft)", color: "var(--asc-danger)" };
 const empty: CSSProperties = { border: "1px dashed var(--asc-border-subtle)", borderRadius: "var(--asc-radius-lg)", padding: 12, background: "var(--asc-bg-subtle)", textAlign: "center", color: "var(--asc-text-muted)", fontWeight: 900 };
-
-
 

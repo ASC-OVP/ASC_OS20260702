@@ -57,6 +57,8 @@ type TaskSearchParams = {
   scope?: string;
   sort?: string;
   assignee?: string;
+  classGroup?: string;
+  q?: string;
   manage?: string;
   newRecurring?: string;
   error?: string;
@@ -77,6 +79,8 @@ type TaskControls = {
   scope: TaskScopeFilter;
   sort: TaskSortKey;
   assigneeIds: string[];
+  classGroupId: string;
+  q: string;
 };
 
 const statusOrder: Record<string, number> = {
@@ -350,6 +354,8 @@ function taskControlsFromParams(params: TaskSearchParams, role: string): TaskCon
     scope,
     sort: normalizeSortKey(params.sort),
     assigneeIds: isAdmin ? assigneeIdsValue(params.assignee) : [],
+    classGroupId: params.classGroup ?? "",
+    q: params.q?.trim() ?? "",
   };
 }
 
@@ -382,10 +388,24 @@ function filterTasksByControls(tasks: TaskRow[], controls: TaskControls, userId:
   return tasks.filter((task) => {
     if (controls.view === "mine" && !isTaskAssignedTo(task, userId)) return false;
     if (controls.assigneeIds.length > 0 && !controls.assigneeIds.some((assigneeId) => isTaskAssignedTo(task, assigneeId))) return false;
+    if (controls.classGroupId && task.classGroupId !== controls.classGroupId) return false;
     if (controls.status === "open" && task.status === "DONE") return false;
     if (controls.status === "done" && task.status !== "DONE") return false;
     if (controls.scope === "recurring" && !task.recurringTaskId) return false;
     if (controls.scope === "general" && task.recurringTaskId) return false;
+    if (controls.q) {
+      const query = controls.q.toLocaleLowerCase("ko-KR");
+      const text = [
+        task.title,
+        task.description,
+        task.assignee.name,
+        ...task.assignees.map((assignment) => assignment.assignee.name),
+        task.classGroup?.name,
+        task.student?.name,
+        ...task.checklistItems.map((item) => item.title),
+      ].filter(Boolean).join(" ").toLocaleLowerCase("ko-KR");
+      if (!text.includes(query)) return false;
+    }
     return true;
   });
 }
@@ -553,6 +573,8 @@ function taskControlsHref(controls: TaskControls, patch: Partial<TaskControls>) 
   if (next.scope !== "all") query.set("scope", next.scope);
   if (next.sort !== "status") query.set("sort", next.sort);
   if (next.assigneeIds.length > 0) query.set("assignee", next.assigneeIds.join(","));
+  if (next.classGroupId) query.set("classGroup", next.classGroupId);
+  if (next.q) query.set("q", next.q);
   const suffix = query.toString();
   return suffix ? `/tasks?${suffix}` : "/tasks";
 }

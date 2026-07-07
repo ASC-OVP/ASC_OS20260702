@@ -9,6 +9,7 @@ import OmrMultiUploadForm from "@/features/omr/components/OmrMultiUploadForm";
 import OmrReviewPreview from "@/features/omr/components/OmrReviewPreview";
 import OmrUploadDeleteButton from "@/features/omr/components/OmrUploadDeleteButton";
 import { requireUser } from "@/lib/auth";
+import { withJosa } from "@/lib/koreanParticles";
 import { ClassTestType, ExamResultStatus, OmrAnswerStatus, OmrTemplateType } from "@prisma/client";
 import { getOmrTemplate, omrTemplateList, type OmrTemplateQuestion } from "@/features/omr/lib/omrTemplates";
 import { OMR_MAX_BATCH_LABEL, OMR_MAX_FILE_LABEL } from "@/features/omr/lib/omrUploadLimits";
@@ -20,6 +21,7 @@ import { applyOmrResultsToStudentScoresAction, gradeOmrAction, gradeSelectedOmrU
 import { recognizeSelectedOmrUploadsAction } from "@/features/omr/actions/recognizeActions";
 import { saveOmrCorrectionsAction } from "@/features/omr/actions/correctionActions";
 import { updateOmrUploadMatchAction, updateOmrUploadSetupAction } from "@/features/omr/actions/matchActions";
+import { canManageExamForUser } from "@/features/omr/lib/omrPermissions";
 import { DEFAULT_MAX_GENERATED_LESSONS, generatedLessonDates } from "@/features/classes/lib/lessonScheduleCore";
 
 type Props = {
@@ -143,7 +145,7 @@ export default async function OmrPage({ searchParams }: Props) {
   const sp = await searchParams;
   if (sp.uploadId) redirect(`/omr/uploads/${sp.uploadId}`);
 
-  const canManageExam = user.role === "ADMIN" || user.role === "MANAGER" || user.role === "TEACHER";
+  const canManageExam = await canManageExamForUser(user);
   const q = sp.q?.trim() ?? "";
   const dateFilter = sp.date ?? "";
   const classGroupFilter = sp.classGroupId ?? "";
@@ -1555,9 +1557,10 @@ function uploadNoticeMessage(error?: string, warning?: string, skipped?: string)
     };
   }
   if (warning === "file-too-large") {
+    const skippedLabel = skippedCount ? `${skippedCount}개` : "일부";
     return {
       tone: "warning" as const,
-      message: `${skippedCount || "일부"}개 파일은 ${OMR_MAX_FILE_LABEL}를 초과해서 건너뛰었습니다. 업로드된 파일만 먼저 처리할 수 있습니다.`,
+      message: `${skippedLabel} 파일은 ${withJosa(OMR_MAX_FILE_LABEL, "을/를")} 초과해서 건너뛰었습니다. 업로드된 파일만 먼저 처리할 수 있습니다.`,
     };
   }
   return null;

@@ -25,17 +25,16 @@ export default function PersonalStickyBoard({ memos }: Props) {
         <span style={countBadge}>{memos.length}개</span>
       </div>
 
-      <StickyMemoComposer placeholder="빠른 메모를 적어두세요." rows={2} />
-
       <div style={grid}>
+        <StickyMemoComposer placeholder="빠른 메모를 적어두세요." rows={2} />
         {memos.map((memo) => (
           <StickyMemoCard
             key={memo.id}
+            showPrimarySwitch
             memo={{
               id: memo.id,
               content: memo.content,
               color: memo.color,
-              updatedAtText: `${formatDateTime(memo.updatedAt)} 수정`,
             }}
           />
         ))}
@@ -48,15 +47,6 @@ export default function PersonalStickyBoard({ memos }: Props) {
       </div>
     </section>
   );
-}
-
-function formatDateTime(date: Date) {
-  return new Intl.DateTimeFormat("ko-KR", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
 }
 
 const panel: CSSProperties = { background: "var(--asc-surface)", border: "1px solid transparent", borderRadius: "var(--asc-radius-lg)", padding: 12, display: "grid", gap: 10, minWidth: 0, boxShadow: "var(--asc-shadow-sm)" };

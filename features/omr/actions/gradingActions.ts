@@ -9,10 +9,12 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { omrHref, safeReturnTo, text } from "@/features/omr/lib/omrForm";
 import { gradeOmrUploadInternal } from "@/features/omr/lib/omrGrading";
+import { canManageExamForUser } from "@/features/omr/lib/omrPermissions";
 import { OMR_UPLOAD_STATUSES } from "@/features/omr/lib/omrStatus";
 
 export async function gradeOmrAction(formData: FormData) {
   const user = await requireUser();
+  if (!(await canManageExamForUser(user))) return;
   const uploadId = text(formData, "uploadId");
   const returnTo = safeReturnTo(text(formData, "returnTo"));
   if (!uploadId) return;
@@ -48,6 +50,7 @@ export async function gradeOmrAction(formData: FormData) {
 
 export async function gradeSelectedOmrUploadsAction(formData: FormData) {
   const user = await requireUser();
+  if (!(await canManageExamForUser(user))) return;
   const examId = text(formData, "examId");
   const scope = text(formData, "scope") || "all";
   const selectedIds = formData.getAll("uploadIds").map((value) => String(value)).filter(Boolean);
@@ -104,6 +107,7 @@ export async function gradeSelectedOmrUploadsAction(formData: FormData) {
 
 export async function applyOmrResultsToStudentScoresAction(formData: FormData) {
   const user = await requireUser();
+  if (!(await canManageExamForUser(user))) return;
   const examId = text(formData, "examId");
   const confirmOverwrite = text(formData, "confirmOverwrite") === "1";
 

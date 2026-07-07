@@ -2,29 +2,29 @@
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { deleteStickyMemoAction, updateStickyMemoAction } from "@/features/memos/actions/memoActions";
+import { primaryStickyMemoChangedEvent, readPrimaryStickyMemoId, writePrimaryStickyMemoId } from "@/features/memos/components/stickyMemoPrimary";
 import { getStickyMemoColorTheme, normalizeStickyMemoColor, stickyMemoColors } from "@/features/memos/components/stickyMemoColors";
 
 export type StickyMemoCardView = {
   id: string;
   content: string;
   color: string;
-  updatedAtText: string;
 };
-
-type SaveState = "idle" | "dirty" | "saving" | "saved" | "error" | "empty";
 
 type Props = {
   memo: StickyMemoCardView;
   compact?: boolean;
+  showDelete?: boolean;
+  showPrimarySwitch?: boolean;
 };
 
 const SAVE_DELAY_MS = 650;
 
-export default function StickyMemoCard({ memo, compact = false }: Props) {
+export default function StickyMemoCard({ memo, compact = false, showDelete = true, showPrimarySwitch = false }: Props) {
   const normalizedInitialColor = normalizeStickyMemoColor(memo.color);
   const [content, setContent] = useState(memo.content);
   const [color, setColor] = useState(normalizedInitialColor);
-  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [primaryMemoId, setPrimaryMemoId] = useState("");
   const saveTimerRef = useRef<number | null>(null);
   const saveSeqRef = useRef(0);
   const lastSavedRef = useRef({ content: memo.content, color: normalizedInitialColor });
@@ -35,23 +35,35 @@ export default function StickyMemoCard({ memo, compact = false }: Props) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!showPrimarySwitch) return;
+
+    const syncPrimary = () => setPrimaryMemoId(readPrimaryStickyMemoId());
+    syncPrimary();
+
+    window.addEventListener(primaryStickyMemoChangedEvent, syncPrimary);
+    window.addEventListener("storage", syncPrimary);
+    return () => {
+      window.removeEventListener(primaryStickyMemoChangedEvent, syncPrimary);
+      window.removeEventListener("storage", syncPrimary);
+    };
+  }, [showPrimarySwitch]);
+
   const theme = getStickyMemoColorTheme(color);
+  const isPrimary = primaryMemoId === memo.id;
 
   function queueSave(nextContent: string, nextColor: string) {
     if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
 
     const trimmed = nextContent.trim();
     if (!trimmed) {
-      setSaveState("empty");
       return;
     }
 
     if (lastSavedRef.current.content === nextContent && lastSavedRef.current.color === nextColor) {
-      setSaveState("idle");
       return;
     }
 
-    setSaveState("dirty");
     saveTimerRef.current = window.setTimeout(() => {
       void saveMemo(nextContent, nextColor);
     }, SAVE_DELAY_MS);
@@ -65,18 +77,15 @@ export default function StickyMemoCard({ memo, compact = false }: Props) {
 
     const trimmed = nextContent.trim();
     if (!trimmed) {
-      setSaveState("empty");
       return;
     }
 
     if (lastSavedRef.current.content === nextContent && lastSavedRef.current.color === nextColor) {
-      setSaveState("idle");
       return;
     }
 
     const saveSeq = saveSeqRef.current + 1;
     saveSeqRef.current = saveSeq;
-    setSaveState("saving");
 
     try {
       const formData = new FormData();
@@ -87,10 +96,9 @@ export default function StickyMemoCard({ memo, compact = false }: Props) {
 
       if (saveSeqRef.current === saveSeq) {
         lastSavedRef.current = { content: nextContent, color: nextColor };
-        setSaveState("saved");
       }
     } catch {
-      if (saveSeqRef.current === saveSeq) setSaveState("error");
+      return;
     }
   }
 
@@ -105,41 +113,42 @@ export default function StickyMemoCard({ memo, compact = false }: Props) {
     queueSave(content, normalized);
   }
 
-  function statusText() {
-    if (saveState === "dirty") return "수정 중";
-    if (saveState === "saving") return "저장 중...";
-    if (saveState === "saved") return "저장됨";
-    if (saveState === "error") return "저장 실패";
-    if (saveState === "empty") return "내용을 입력하세요";
-    return memo.updatedAtText;
+  function handlePrimaryChange() {
+    writePrimaryStickyMemoId(isPrimary ? "" : memo.id);
   }
 
   return (
     <article style={{ ...sticky, ...(compact ? stickyCompact : {}), background: theme.surface, borderColor: theme.border }}>
+      {showPrimarySwitch && (
+        <button
+          type="button"
+          onClick={handlePrimaryChange}
+          style={{ ...switchButton, ...(isPrimary ? switchButtonOn : {}) }}
+          role="switch"
+          aria-checked={isPrimary}
+          aria-label="움직이는 포스트잇에 표시"
+          title="움직이는 포스트잇에 표시"
+        >
+          <span style={{ ...switchKnob, ...(isPrimary ? switchKnobOn : {}) }} />
+        </button>
+      )}
+      {showDelete && (
+        <form action={deleteStickyMemoAction} style={deleteForm}>
+          <input type="hidden" name="stickyMemoId" value={memo.id} />
+          <button type="submit" style={deleteButton} aria-label="포스트잇 삭제">
+            ×
+          </button>
+        </form>
+      )}
       <textarea
         value={content}
         required
-        rows={compact ? 3 : 4}
         onChange={(event) => handleContentChange(event.target.value)}
         onBlur={() => void saveMemo()}
         style={stickyText}
         aria-label="포스트잇 내용"
       />
-      <div style={cardFoot}>
-        <ColorPalette current={color} onChange={handleColorChange} />
-        <form
-          action={deleteStickyMemoAction}
-          onSubmit={(event) => {
-            if (!window.confirm("이 포스트잇을 삭제할까요?")) event.preventDefault();
-          }}
-        >
-          <input type="hidden" name="stickyMemoId" value={memo.id} />
-          <button type="submit" style={deleteButton}>
-            삭제
-          </button>
-        </form>
-      </div>
-      <small style={{ ...statusLine, ...(saveState === "error" || saveState === "empty" ? statusError : {}) }}>{statusText()}</small>
+      <ColorPalette current={color} onChange={handleColorChange} />
     </article>
   );
 }
@@ -176,29 +185,70 @@ function ColorPalette({ current, onChange }: { current: string; onChange: (color
 }
 
 const sticky: CSSProperties = {
+  aspectRatio: "1 / 1",
+  position: "relative",
+  width: "100%",
+  height: "100%",
+  boxSizing: "border-box",
   borderWidth: 1,
   borderStyle: "solid",
   borderColor: "rgba(146,64,14,.16)",
   borderRadius: "var(--asc-radius-md)",
   padding: 10,
   display: "grid",
+  gridTemplateRows: "1fr auto",
   gap: 7,
-  minHeight: 116,
+  minHeight: 0,
 };
-const stickyCompact: CSSProperties = { padding: 9, minHeight: 108 };
+const stickyCompact: CSSProperties = { padding: 9 };
 const stickyText: CSSProperties = {
   width: "100%",
   minWidth: 0,
   border: 0,
   outline: "none",
-  resize: "vertical",
+  resize: "none",
   background: "transparent",
   lineHeight: 1.42,
   color: "var(--asc-text)",
   fontWeight: 800,
-  padding: 0,
+  padding: "16px 0 0",
 };
-const cardFoot: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 };
+const switchButton: CSSProperties = {
+  position: "absolute",
+  top: 7,
+  left: 7,
+  zIndex: 1,
+  width: 31,
+  height: 18,
+  border: 0,
+  borderRadius: 999,
+  background: "rgba(17,24,39,.18)",
+  padding: 2,
+  cursor: "pointer",
+};
+const switchButtonOn: CSSProperties = { background: "var(--asc-primary)" };
+const switchKnob: CSSProperties = {
+  display: "block",
+  width: 14,
+  height: 14,
+  borderRadius: 999,
+  background: "var(--asc-surface)",
+  boxShadow: "0 1px 2px rgba(15,23,42,.18)",
+};
+const switchKnobOn: CSSProperties = { transform: "translateX(13px)" };
+const deleteForm: CSSProperties = { position: "absolute", top: 4, right: 4, zIndex: 1 };
+const deleteButton: CSSProperties = {
+  width: 22,
+  height: 22,
+  border: 0,
+  background: "transparent",
+  color: "var(--asc-text-muted)",
+  padding: 0,
+  fontSize: 18,
+  lineHeight: 1,
+  fontWeight: 850,
+  cursor: "pointer",
+};
 const colorRow: CSSProperties = { display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap" };
 const swatch: CSSProperties = {
   width: 17,
@@ -213,16 +263,3 @@ const swatch: CSSProperties = {
   cursor: "pointer",
 };
 const swatchCheck: CSSProperties = { fontSize: 11, fontWeight: 950, lineHeight: 1 };
-const deleteButton: CSSProperties = {
-  height: 28,
-  border: "1px solid transparent",
-  borderRadius: "var(--asc-radius-md)",
-  background: "rgba(255,255,255,.62)",
-  color: "var(--asc-danger)",
-  padding: "0 8px",
-  fontSize: 12,
-  fontWeight: 950,
-  cursor: "pointer",
-};
-const statusLine: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 11, fontWeight: 850 };
-const statusError: CSSProperties = { color: "var(--asc-danger)" };

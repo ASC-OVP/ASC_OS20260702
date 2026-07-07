@@ -210,8 +210,8 @@ export function createSsodaaProvider(academyId: string, status: SmsProviderStatu
 
 async function requireSsodaaConfig(academyId: string) {
   const config = await getSsodaaConfig(academyId);
-  if (!config?.apiKey) throw new Error("쏘다 API Key가 설정되어 있지 않습니다.");
-  if (!config.tokenKey) throw new Error("쏘다 Token Key가 설정되어 있지 않습니다.");
+  if (!config?.apiKey) throw new Error("쏘다 API Key 값이 설정되어 있지 않습니다.");
+  if (!config.tokenKey) throw new Error("쏘다 Token Key 값이 설정되어 있지 않습니다.");
   if (!config.defaultSendPhone) throw new Error("쏘다 기본 발신번호가 설정되어 있지 않습니다.");
   return config;
 }
@@ -465,9 +465,9 @@ function ssodaaDisabledReason({ dryRun, hasApiKey, hasApiSecret, hasSenderNumber
   hasSenderNumber: boolean;
   connectionStatus?: string | null;
 }) {
-  if (dryRun) return "SMS_DRY_RUN이 false가 아니므로 실제 발송이 차단되어 있습니다.";
-  if (!hasApiKey) return "쏘다 API Key가 설정되어 있지 않습니다.";
-  if (!hasApiSecret) return "쏘다 Token Key가 설정되어 있지 않습니다.";
+  if (dryRun) return "SMS_DRY_RUN 값이 false가 아니므로 실제 발송이 차단되어 있습니다.";
+  if (!hasApiKey) return "쏘다 API Key 값이 설정되어 있지 않습니다.";
+  if (!hasApiSecret) return "쏘다 Token Key 값이 설정되어 있지 않습니다.";
   if (!hasSenderNumber) return "쏘다 기본 발신번호가 설정되어 있지 않습니다.";
   if (connectionStatus === "FAILED") return "쏘다 API 연결 테스트가 실패 상태입니다.";
   return "쏘다 API 설정 확인이 필요합니다.";

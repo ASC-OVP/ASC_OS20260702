@@ -7,10 +7,12 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { cleanId, enumValue, optionalText, safeReturnTo, text } from "@/features/omr/lib/omrForm";
 import { matchStudentByPhoneLast8, phoneLast8 } from "@/features/omr/lib/omrMatching";
+import { canManageExamForUser } from "@/features/omr/lib/omrPermissions";
 import { PHONE_RECOGNIZE_STATUSES, TEMPLATE_TYPES } from "@/features/omr/lib/omrStatus";
 
 export async function updateOmrUploadMatchAction(formData: FormData) {
   const user = await requireUser();
+  if (!(await canManageExamForUser(user))) return;
   const uploadId = text(formData, "uploadId");
   const returnTo = safeReturnTo(text(formData, "returnTo"));
   if (!uploadId) return;
@@ -48,6 +50,7 @@ export async function updateOmrUploadMatchAction(formData: FormData) {
 
 export async function updateOmrUploadSetupAction(formData: FormData) {
   const user = await requireUser();
+  if (!(await canManageExamForUser(user))) return;
   const uploadId = text(formData, "uploadId");
   const returnTo = safeReturnTo(text(formData, "returnTo"));
   if (!uploadId) return;
@@ -80,5 +83,4 @@ export async function updateOmrUploadSetupAction(formData: FormData) {
   if (returnTo) revalidatePath(returnTo);
   redirect(returnTo ?? `/omr/uploads/${upload.id}`);
 }
-
 

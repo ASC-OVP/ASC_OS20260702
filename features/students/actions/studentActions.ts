@@ -170,7 +170,7 @@ function canManageClassGroups(role: string) {
 }
 
 function canManageStudents(role: string) {
-  return role === "ADMIN" || role === "MANAGER" || role === "TEACHER";
+  return role === "ADMIN" || role === "MANAGER" || role === "TEACHER" || role === "ASSISTANT";
 }
 
 async function findClassGroupForAcademy(academyId: string, classGroupId: string | null) {
@@ -852,6 +852,7 @@ export async function createClassGroup(formData: FormData) {
   revalidatePath("/students");
   revalidatePath("/classes");
   revalidatePath("/calendar");
+  revalidatePath("/dashboard");
 }
 
 export async function updateClassGroup(formData: FormData) {
@@ -934,6 +935,7 @@ export async function updateClassGroup(formData: FormData) {
   revalidatePath("/students");
   revalidatePath("/classes");
   revalidatePath("/calendar");
+  revalidatePath("/dashboard");
   revalidatePath(`/classes/${id}`);
 }
 
@@ -977,6 +979,7 @@ export async function deleteClassGroup(formData: FormData) {
   revalidatePath("/students");
   revalidatePath("/classes");
   revalidatePath("/calendar");
+  revalidatePath("/dashboard");
 }
 
 function compactSchedule(daysOfWeek: string | null, startTime: string | null, endTime: string | null) {

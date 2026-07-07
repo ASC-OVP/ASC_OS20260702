@@ -140,16 +140,18 @@ export async function createStickyMemoAction(formData: FormData) {
   const content = text(formData, "content");
   if (!content) return;
 
-  await prisma.personalStickyMemo.create({
+  const memo = await prisma.personalStickyMemo.create({
     data: {
       academyId: user.academyId,
       userId: user.id,
       content,
       color: stickyColor(text(formData, "color")),
     },
+    select: { id: true },
   });
 
   revalidateMemoSurfaces();
+  return { id: memo.id };
 }
 
 export async function updateStickyMemoAction(formData: FormData) {

@@ -2,6 +2,12 @@
 
 import { canDeactivateAccount, canManageStaff, hashPassword, requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  getStaffPermissionsForAcademy,
+  normalizeStaffPermissionSet,
+  staffPermissionDefinitions,
+  staffPermissionsSettingKey,
+} from "@/lib/staffPermissions";
 import { UserRole } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -14,6 +20,11 @@ function text(formData: FormData, key: string) {
 
 function roleValue(value: string) {
   return USER_ROLES.includes(value as UserRole) ? (value as UserRole) : null;
+}
+
+function checked(formData: FormData, key: string) {
+  const value = formData.get(key);
+  return value === "on" || value === "true" || value === "1";
 }
 
 export async function createUserAction(formData: FormData) {
@@ -113,5 +124,54 @@ export async function deleteUserAction(formData: FormData) {
 
   revalidatePath("/users");
   revalidatePath("/staff");
+  redirect("/users");
+}
+
+export async function updateUserPermissionsAction(formData: FormData) {
+  const user = await requireUser();
+
+  if (!canManageStaff(user.role)) {
+    redirect("/users?error=permission");
+  }
+
+  const id = text(formData, "userId");
+  if (!id) {
+    redirect("/users?error=missing");
+  }
+
+  const target = await prisma.user.findFirst({
+    where: { id, academyId: user.academyId },
+    select: { id: true, role: true },
+  });
+
+  if (!target || target.role !== UserRole.ASSISTANT) {
+    redirect("/users?error=missing");
+  }
+
+  const permissions = await getStaffPermissionsForAcademy(user.academyId);
+  const nextSet = normalizeStaffPermissionSet(
+    Object.fromEntries(staffPermissionDefinitions.map((permission) => [permission.key, checked(formData, permission.key)]))
+  );
+
+  if (staffPermissionDefinitions.some((permission) => nextSet[permission.key])) {
+    permissions[target.id] = nextSet;
+  } else {
+    delete permissions[target.id];
+  }
+
+  await prisma.academySetting.upsert({
+    where: { academyId_key: { academyId: user.academyId, key: staffPermissionsSettingKey } },
+    create: {
+      academyId: user.academyId,
+      key: staffPermissionsSettingKey,
+      value: JSON.stringify(permissions),
+    },
+    update: { value: JSON.stringify(permissions) },
+  });
+
+  revalidatePath("/users");
+  revalidatePath("/staff");
+  revalidatePath("/messages");
+  revalidatePath("/omr");
   redirect("/users");
 }

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import StickyMemoCard from "@/features/memos/components/StickyMemoCard";
 import StickyMemoComposer from "@/features/memos/components/StickyMemoComposer";
+import { primaryStickyMemoChangedEvent, readPrimaryStickyMemoId } from "@/features/memos/components/stickyMemoPrimary";
 
 export type StickyLauncherMemo = {
   id: string;
@@ -33,6 +34,15 @@ type DragState = {
   size: ElementSize;
 };
 
+type ResizeState = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  startSize: number;
+  originX: number;
+  originY: number;
+};
+
 type ViewportSize = {
   width: number;
   height: number;
@@ -45,23 +55,29 @@ type ElementSize = {
 
 const STORAGE_KEY = "asc-sticky-memo-window-position";
 const LEGACY_STORAGE_KEY = "asc-sticky-memo-launcher-position";
+const SIZE_STORAGE_KEY = "asc-sticky-memo-window-size";
 const EDGE_GAP = 14;
 const DOCK_GAP = 8;
 const DRAG_THRESHOLD = 5;
+const MIN_PANEL_SIZE = 170;
+const MAX_PANEL_SIZE = 520;
 const BUTTON_FALLBACK_SIZE: ElementSize = { width: 42, height: 42 };
-const PANEL_FALLBACK_SIZE: ElementSize = { width: 360, height: 460 };
+const PANEL_FALLBACK_SIZE: ElementSize = { width: 230, height: 230 };
 
 export default function StickyMemoLauncher({ memos }: Props) {
   const [open, setOpen] = useState(false);
+  const [primaryMemoId, setPrimaryMemoId] = useState("");
   const [position, setPosition] = useState<LauncherPosition | null>(null);
   const [viewport, setViewport] = useState<ViewportSize>({ width: 0, height: 0 });
   const [buttonSize, setButtonSize] = useState<ElementSize>(BUTTON_FALLBACK_SIZE);
   const [panelSize, setPanelSize] = useState<ElementSize>(PANEL_FALLBACK_SIZE);
   const [dragging, setDragging] = useState(false);
+  const [resizing, setResizing] = useState(false);
   const [mounted, setMounted] = useState(false);
   const launcherRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
+  const resizeRef = useRef<ResizeState | null>(null);
   const openRef = useRef(open);
   const panelSizeRef = useRef(panelSize);
   const suppressClickRef = useRef(false);
@@ -72,6 +88,18 @@ export default function StickyMemoLauncher({ memos }: Props) {
   }, [open]);
 
   useEffect(() => {
+    const syncPrimary = () => setPrimaryMemoId(readPrimaryStickyMemoId());
+    syncPrimary();
+
+    window.addEventListener(primaryStickyMemoChangedEvent, syncPrimary);
+    window.addEventListener("storage", syncPrimary);
+    return () => {
+      window.removeEventListener(primaryStickyMemoChangedEvent, syncPrimary);
+      window.removeEventListener("storage", syncPrimary);
+    };
+  }, []);
+
+  useEffect(() => {
     panelSizeRef.current = panelSize;
   }, [panelSize]);
 
@@ -80,12 +108,14 @@ export default function StickyMemoLauncher({ memos }: Props) {
       const nextViewport = readViewportSize();
       const measuredButtonSize = getButtonSize(launcherRef.current);
       const savedPosition = readStoredPosition();
+      const savedPanelSize = readStoredPanelSize(nextViewport);
       const initialPosition =
         savedPosition ??
         getCornerPosition("bottom-right", nextViewport, measuredButtonSize);
 
       setViewport(nextViewport);
       setButtonSize(measuredButtonSize);
+      setPanelSize(savedPanelSize);
       setPosition(clampPosition(initialPosition, nextViewport, measuredButtonSize));
       setMounted(true);
     };
@@ -97,6 +127,7 @@ export default function StickyMemoLauncher({ memos }: Props) {
 
       setViewport(resizedViewport);
       setButtonSize(resizedButtonSize);
+      setPanelSize((current) => clampPanelSize(current.width, resizedViewport));
       setPosition((current) => {
         if (!current) return current;
         if (current.corner) return getCornerPosition(current.corner, resizedViewport, resizedSize);
@@ -112,28 +143,13 @@ export default function StickyMemoLauncher({ memos }: Props) {
     };
   }, []);
 
-  useEffect(() => {
-    if (!open) return;
-
-    const measurePanel = () => {
-      const rect = panelRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      setPanelSize({ width: rect.width, height: rect.height });
-    };
-
-    const frameId = window.requestAnimationFrame(measurePanel);
-    window.addEventListener("resize", measurePanel);
-    return () => {
-      window.cancelAnimationFrame(frameId);
-      window.removeEventListener("resize", measurePanel);
-    };
-  }, [open, memos.length]);
-
   if (!mounted) return null;
 
   const currentButtonPosition = position ?? getFallbackButtonPosition();
   const panelPosition = clampPosition(currentButtonPosition, viewport, panelSize);
   const panelPlacement: CSSProperties = { left: panelPosition.x, top: panelPosition.y };
+  const selectedMemo = primaryMemoId ? memos.find((memo) => memo.id === primaryMemoId) : undefined;
+  const primaryMemo = selectedMemo ?? memos[0];
   const launcherPlacement = open
     ? getDockedLauncherPosition(panelPosition, viewport, panelSize, buttonSize)
     : clampPosition(currentButtonPosition, viewport, buttonSize);
@@ -170,7 +186,7 @@ export default function StickyMemoLauncher({ memos }: Props) {
 
   const handlePanelPointerDown = (event: PointerEvent<HTMLElement>) => {
     if (event.button !== 0) return;
-    if ((event.target as HTMLElement).closest("button")) return;
+    if ((event.target as HTMLElement).closest("button, textarea, input, select")) return;
 
     const startPosition = position ?? currentButtonPosition;
 
@@ -250,6 +266,88 @@ export default function StickyMemoLauncher({ memos }: Props) {
     setDragging(false);
   };
 
+  const handleResizePointerDown = (event: PointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startPosition = position ?? currentButtonPosition;
+    resizeRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startSize: panelSize.width,
+      originX: startPosition.x,
+      originY: startPosition.y,
+    };
+
+    previousUserSelectRef.current = document.body.style.userSelect;
+    document.body.style.userSelect = "none";
+    suppressClickRef.current = true;
+    setResizing(true);
+
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture can fail if the browser has already cancelled the pointer.
+    }
+  };
+
+  const handleResizePointerMove = (event: PointerEvent<HTMLButtonElement>) => {
+    const resize = resizeRef.current;
+    if (!resize || resize.pointerId !== event.pointerId) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const resizedViewport = readViewportSize();
+    const delta = Math.abs(event.clientX - resize.startX) > Math.abs(event.clientY - resize.startY)
+      ? event.clientX - resize.startX
+      : event.clientY - resize.startY;
+    const nextSize = clampPanelSizeValue(resize.startSize + delta, resizedViewport);
+    const nextPanelSize = { width: nextSize, height: nextSize };
+
+    setViewport(resizedViewport);
+    setPanelSize(nextPanelSize);
+    setPosition(clampPosition({ x: resize.originX, y: resize.originY }, resizedViewport, nextPanelSize));
+  };
+
+  const finishResize = (event: PointerEvent<HTMLButtonElement>) => {
+    const resize = resizeRef.current;
+    if (!resize || resize.pointerId !== event.pointerId) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    resizeRef.current = null;
+    document.body.style.userSelect = previousUserSelectRef.current;
+    setResizing(false);
+
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      // The browser may release capture automatically before pointer cancel.
+    }
+
+    const resizedViewport = readViewportSize();
+    const delta = Math.abs(event.clientX - resize.startX) > Math.abs(event.clientY - resize.startY)
+      ? event.clientX - resize.startX
+      : event.clientY - resize.startY;
+    const nextSize = clampPanelSizeValue(resize.startSize + delta, resizedViewport);
+    const nextPanelSize = { width: nextSize, height: nextSize };
+    const nextPosition = clampPosition({ x: resize.originX, y: resize.originY }, resizedViewport, nextPanelSize);
+
+    setViewport(resizedViewport);
+    setPanelSize(nextPanelSize);
+    setPosition(nextPosition);
+    saveStoredPanelSize(nextSize);
+    saveStoredPosition(nextPosition);
+    window.setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 0);
+  };
+
   const handleClick = () => {
     if (suppressClickRef.current) {
       suppressClickRef.current = false;
@@ -267,47 +365,41 @@ export default function StickyMemoLauncher({ memos }: Props) {
           style={{
             ...panel,
             ...panelPlacement,
-            transition: dragging ? "none" : "left 160ms ease, top 160ms ease",
+            width: panelSize.width,
+            height: panelSize.height,
+            cursor: resizing ? "nwse-resize" : dragging ? "grabbing" : "grab",
+            transition: dragging || resizing ? "none" : "left 160ms ease, top 160ms ease",
           }}
           aria-label="내 포스트잇 패널"
+          onPointerDown={handlePanelPointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={finishPointerDrag}
+          onPointerCancel={finishPointerDrag}
+          title="빈 곳을 드래그해서 위치 이동"
         >
-          <div
-            style={{ ...head, cursor: dragging ? "grabbing" : "grab" }}
-            onPointerDown={handlePanelPointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={finishPointerDrag}
-            onPointerCancel={finishPointerDrag}
-            title="드래그해서 위치 이동"
-          >
-            <div style={headText}>
-              <b>내 포스트잇</b>
-              <span>{memos.length}개</span>
-            </div>
-            <button type="button" onClick={() => setOpen(false)} style={closeButton} aria-label="포스트잇 닫기">×</button>
-          </div>
-
-          <StickyMemoComposer placeholder="빠른 메모" rows={2} />
-
-          <div style={list}>
-            {memos.map((memo) => (
-              <StickyMemoCard
-                key={memo.id}
-                compact
-                memo={{
-                  id: memo.id,
-                  content: memo.content,
-                  color: memo.color,
-                  updatedAtText: `${memo.updatedAt} 수정`,
-                }}
-              />
-            ))}
-            {memos.length === 0 && (
-              <div style={empty}>
-                <b>아직 포스트잇이 없습니다.</b>
-                <span>짧은 할 일이나 아이디어를 남겨두세요.</span>
-              </div>
-            )}
-          </div>
+          {primaryMemo ? (
+            <StickyMemoCard
+              compact
+              showDelete={false}
+              memo={{
+                id: primaryMemo.id,
+                content: primaryMemo.content,
+                color: primaryMemo.color,
+              }}
+            />
+          ) : (
+            <StickyMemoComposer placeholder="빠른 메모" rows={2} />
+          )}
+          <button
+            type="button"
+            aria-label="포스트잇 크기 조절"
+            title="크기 조절"
+            style={resizeHandle}
+            onPointerDown={handleResizePointerDown}
+            onPointerMove={handleResizePointerMove}
+            onPointerUp={finishResize}
+            onPointerCancel={finishResize}
+          />
         </section>
       )}
 
@@ -379,6 +471,20 @@ function clampPosition(position: LauncherPosition | { x: number; y: number }, vi
   };
 }
 
+function getMaxPanelSize(viewport: ViewportSize) {
+  if (!viewport.width || !viewport.height) return MAX_PANEL_SIZE;
+  return Math.max(MIN_PANEL_SIZE, Math.min(MAX_PANEL_SIZE, viewport.width - EDGE_GAP * 2, viewport.height - EDGE_GAP * 2));
+}
+
+function clampPanelSizeValue(size: number, viewport: ViewportSize) {
+  return Math.round(clamp(size, MIN_PANEL_SIZE, getMaxPanelSize(viewport)));
+}
+
+function clampPanelSize(size: number, viewport: ViewportSize): ElementSize {
+  const nextSize = clampPanelSizeValue(size, viewport);
+  return { width: nextSize, height: nextSize };
+}
+
 function getCornerPosition(corner: SnapCorner, viewport: ViewportSize, size: ElementSize): LauncherPosition {
   const left = EDGE_GAP;
   const right = Math.max(EDGE_GAP, viewport.width - size.width - EDGE_GAP);
@@ -394,6 +500,20 @@ function getCornerPosition(corner: SnapCorner, viewport: ViewportSize, size: Ele
 
 function isSnapCorner(value: unknown): value is SnapCorner {
   return value === "top-left" || value === "top-right" || value === "bottom-left" || value === "bottom-right";
+}
+
+function readStoredPanelSize(viewport: ViewportSize): ElementSize {
+  if (typeof window === "undefined") return PANEL_FALLBACK_SIZE;
+
+  try {
+    const raw = window.localStorage.getItem(SIZE_STORAGE_KEY);
+    const parsed = raw ? Number(raw) : PANEL_FALLBACK_SIZE.width;
+    if (Number.isFinite(parsed)) return clampPanelSize(parsed, viewport);
+  } catch {
+    return clampPanelSize(PANEL_FALLBACK_SIZE.width, viewport);
+  }
+
+  return clampPanelSize(PANEL_FALLBACK_SIZE.width, viewport);
 }
 
 function readStoredPosition(): LauncherPosition | null {
@@ -415,6 +535,16 @@ function readStoredPosition(): LauncherPosition | null {
   }
 
   return null;
+}
+
+function saveStoredPanelSize(size: number) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(SIZE_STORAGE_KEY, String(Math.round(size)));
+  } catch {
+    // localStorage can be unavailable in private browsing or restricted environments.
+  }
 }
 
 function saveStoredPosition(position: LauncherPosition) {
@@ -467,9 +597,29 @@ const launcher: CSSProperties = {
   userSelect: "none",
 };
 const icon: CSSProperties = { display: "block", pointerEvents: "none" };
-const panel: CSSProperties = { position: "fixed", pointerEvents: "auto", width: "min(360px, calc(100vw - 28px))", maxHeight: "min(600px, calc(100vh - 28px))", overflowY: "auto", background: "var(--asc-surface)", border: "1px solid transparent", borderRadius: 10, boxShadow: "var(--asc-shadow-modal)", padding: 10, display: "grid", gap: 9 };
-const head: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, touchAction: "none", userSelect: "none" };
-const headText: CSSProperties = { display: "flex", flexDirection: "column", gap: 1 };
-const closeButton: CSSProperties = { width: 28, height: 28, border: "1px solid transparent", borderRadius: 8, background: "var(--asc-bg-subtle)", fontWeight: 950, cursor: "pointer" };
-const list: CSSProperties = { display: "grid", gap: 7 };
-const empty: CSSProperties = { border: "1px dashed var(--asc-border)", borderRadius: 8, padding: 14, textAlign: "center", color: "var(--asc-text-muted)", fontWeight: 900, display: "grid", gap: 4, background: "#fffbeb" };
+const panel: CSSProperties = {
+  position: "fixed",
+  pointerEvents: "auto",
+  background: "transparent",
+  border: 0,
+  padding: 0,
+  display: "grid",
+  touchAction: "none",
+  userSelect: "none",
+};
+const resizeHandle: CSSProperties = {
+  position: "absolute",
+  right: 5,
+  bottom: 5,
+  zIndex: 2,
+  width: 17,
+  height: 17,
+  border: 0,
+  borderRadius: 4,
+  borderRight: "2px solid rgba(113,63,18,.42)",
+  borderBottom: "2px solid rgba(113,63,18,.42)",
+  background: "transparent",
+  cursor: "nwse-resize",
+  padding: 0,
+  touchAction: "none",
+};

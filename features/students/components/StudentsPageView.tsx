@@ -11,6 +11,9 @@ type Props = {
     classGroupId?: string;
     classGroupIds?: string;
     testId?: string;
+    quick?: string;
+    quickLessonId?: string;
+    quickLessonPosition?: string;
   }>;
 };
 
@@ -26,6 +29,10 @@ export default async function StudentsPage({ searchParams }: Props) {
     rows,
     selectedTestExamId,
     testOptions,
+    quickDate,
+    quickLessonId,
+    quickLessonPosition,
+    quickMode,
     uploadStudents,
   } = await loadStudentsPageData(await searchParams);
   const selectedClassGroup = classGroupOptions.find((classGroup) => classGroup.id === effectiveClassGroupId);
@@ -72,6 +79,10 @@ export default async function StudentsPage({ searchParams }: Props) {
           classGroups={classGroupOptions}
           classTests={testOptions}
           selectedTestExamId={selectedTestExamId}
+          quickMode={quickMode}
+          quickDate={quickDate}
+          quickLessonId={quickLessonId}
+          quickLessonPosition={quickLessonPosition}
         />
       </section>
     </main>

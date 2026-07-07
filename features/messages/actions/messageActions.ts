@@ -7,6 +7,7 @@ import { canExportFullAcademy, studentWhereForUser } from "@/lib/scopes";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { recordActivity } from "@/lib/activityLog";
+import { canComposeMessages, canSendActualMessages, getStaffPermissionSet } from "@/lib/staffPermissions";
 import { ensureDefaultMessageTemplates } from "@/lib/sms/ensureDefaultTemplates";
 import { getSmsProviderForAcademy, getSmsProviderStatusForAcademy } from "@/lib/sms/provider";
 import { buildMessageRecipients, type MessageStudent } from "@/lib/sms/recipients";
@@ -48,16 +49,16 @@ function targetTypeValue(value: string): MessageTargetType {
   return targetTypeValues.includes(value as MessageTargetType) ? (value as MessageTargetType) : "GUARDIAN";
 }
 
-function canComposeMessages(role: string) {
-  return role === "ADMIN" || role === "MANAGER" || role === "TEACHER";
-}
-
-function canSendActualMessages(role: string) {
-  return role === "ADMIN" || role === "MANAGER";
-}
-
 function canManageSmsSettings(role: string) {
   return role === "ADMIN" || role === "MANAGER";
+}
+
+async function messagePermissionsForUser(user: Awaited<ReturnType<typeof requireUser>>) {
+  const permissions = await getStaffPermissionSet(user.academyId, user.id);
+  return {
+    canCompose: canComposeMessages(user.role, permissions),
+    canSendActual: canSendActualMessages(user.role, permissions),
+  };
 }
 
 function parseStudentIds(raw: string) {
@@ -81,6 +82,18 @@ function messageContext(formData: FormData, academyName: string): TemplateContex
     assignmentName: optionalText(formData, "assignmentName"),
     examName: optionalText(formData, "examName"),
     examDate: optionalText(formData, "examDate"),
+    score: optionalText(formData, "score"),
+    maxScore: optionalText(formData, "maxScore"),
+    averageScore: optionalText(formData, "averageScore"),
+    rank: optionalText(formData, "rank"),
+    correctCount: optionalText(formData, "correctCount"),
+    wrongCount: optionalText(formData, "wrongCount"),
+    blankCount: optionalText(formData, "blankCount"),
+    highestScore: optionalText(formData, "highestScore"),
+    weakType: optionalText(formData, "weakType"),
+    wrongQuestions: optionalText(formData, "wrongQuestions"),
+    remedialReason: optionalText(formData, "remedialReason"),
+    feedback: optionalText(formData, "feedback"),
     reportName: optionalText(formData, "reportName"),
     reportLink: optionalText(formData, "reportLink"),
     academyName,
@@ -229,7 +242,8 @@ export async function ensureDefaultMessageTemplatesAction() {
 
 export async function createMessageTemplateAction(formData: FormData) {
   const user = await requireUser();
-  if (!canComposeMessages(user.role)) redirect(messagesUrl({ tab: "templates", error: "permission" }));
+  const { canCompose } = await messagePermissionsForUser(user);
+  if (!canCompose) redirect(messagesUrl({ tab: "templates", error: "permission" }));
 
   const name = text(formData, "name");
   const body = text(formData, "body");
@@ -257,7 +271,8 @@ export async function createMessageTemplateAction(formData: FormData) {
 
 export async function updateMessageTemplateAction(formData: FormData) {
   const user = await requireUser();
-  if (!canComposeMessages(user.role)) redirect(messagesUrl({ tab: "templates", error: "permission" }));
+  const { canCompose } = await messagePermissionsForUser(user);
+  if (!canCompose) redirect(messagesUrl({ tab: "templates", error: "permission" }));
 
   const id = text(formData, "templateId");
   const name = text(formData, "name");
@@ -285,7 +300,8 @@ export async function updateMessageTemplateAction(formData: FormData) {
 
 export async function deleteMessageTemplateAction(formData: FormData) {
   const user = await requireUser();
-  if (!canComposeMessages(user.role)) redirect(messagesUrl({ tab: "templates", error: "permission" }));
+  const { canCompose } = await messagePermissionsForUser(user);
+  if (!canCompose) redirect(messagesUrl({ tab: "templates", error: "permission" }));
 
   const id = text(formData, "templateId");
   if (!id) return;
@@ -300,7 +316,8 @@ export async function deleteMessageTemplateAction(formData: FormData) {
 
 export async function previewMessageRecipientsAction(formData: FormData) {
   const user = await requireUser();
-  if (!canComposeMessages(user.role)) return emptyPreview();
+  const { canCompose } = await messagePermissionsForUser(user);
+  if (!canCompose) return emptyPreview();
   const body = text(formData, "body");
   const isMarketing = checked(formData, "isMarketing");
   const students = await selectedStudentsForMessage(user, parseStudentIds(text(formData, "studentIds")), cleanId(text(formData, "examId")));
@@ -320,11 +337,12 @@ export async function previewMessageRecipientsAction(formData: FormData) {
 
 export async function sendMessageJobAction(formData: FormData) {
   const user = await requireUser();
-  if (!canComposeMessages(user.role)) redirect(messagesUrl({ tab: "compose", error: "permission" }));
+  const { canCompose, canSendActual } = await messagePermissionsForUser(user);
+  if (!canCompose) redirect(messagesUrl({ tab: "compose", error: "permission" }));
 
   const requestedActual = text(formData, "sendMode") === "actual";
   const providerStatus = await getSmsProviderStatusForAcademy(user.academyId);
-  if (requestedActual && !canSendActualMessages(user.role)) redirect(messagesUrl({ tab: "compose", error: "send-permission" }));
+  if (requestedActual && !canSendActual) redirect(messagesUrl({ tab: "compose", error: "send-permission" }));
   if (requestedActual && !providerStatus.canSendActual) redirect(messagesUrl({ tab: "compose", error: "provider-disabled" }));
 
   const dryRun = !requestedActual || providerStatus.dryRun;
@@ -595,7 +613,8 @@ export async function getMessageSettingsStatusAction() {
 
 export async function listMessageTemplatesAction() {
   const user = await requireUser();
-  if (!canComposeMessages(user.role) && !canExportFullAcademy(user.role)) return [];
+  const { canCompose } = await messagePermissionsForUser(user);
+  if (!canCompose && !canExportFullAcademy(user.role)) return [];
   return prisma.messageTemplate.findMany({
     where: { academyId: user.academyId },
     orderBy: [{ isActive: "desc" }, { updatedAt: "desc" }],

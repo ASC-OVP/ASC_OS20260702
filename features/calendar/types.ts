@@ -26,7 +26,7 @@ export type CalendarViewMode = "month" | "week" | "day";
 
 export type CalendarDisplayMode = "calendar" | "list";
 
-export type CalendarContentFilter = "lesson_schedule" | "assistant_work_shift" | "private_memo";
+export type CalendarContentFilter = "lesson_schedule" | "internal_task" | "assistant_work_shift" | "private_memo";
 
 export type CalendarFilterValue = {
   contentTypes: CalendarContentFilter[];

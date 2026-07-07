@@ -63,6 +63,10 @@ export type StudentLessonSpreadsheetProps = {
   classGroups: LessonClassGroupOption[];
   classTests?: ClassTestExamOption[];
   selectedTestExamId?: string | null;
+  quickMode?: "attendance" | "assignment" | null;
+  quickDate?: string | null;
+  quickLessonId?: string | null;
+  quickLessonPosition?: number | null;
 };
 
 export type LessonFieldId = "attendance" | "assignment" | "test";
@@ -134,6 +138,7 @@ export type GridColumn =
       date?: string;
       dateLabel: string;
       scheduleLabel: string;
+      dateIsDuplicated?: boolean;
       classTestId?: string;
       classTestName?: string;
       classTestType?: "REGULAR" | "SINGLE";

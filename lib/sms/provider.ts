@@ -71,10 +71,10 @@ function disabledReason({
   hasApiSecret: boolean;
   hasSenderNumber: boolean;
 }) {
-  if (dryRun) return "SMS_DRY_RUN이 false가 아니므로 실제 발송이 차단되어 있습니다.";
-  if (provider !== "solapi") return "실제 발송 provider가 설정되어 있지 않습니다. 쏘다는 문자 발송 설정에서 저장하거나 SMS_PROVIDER=ssodaa로 설정하세요.";
-  if (!hasApiKey) return "SMS_API_KEY가 설정되어 있지 않습니다.";
-  if (!hasApiSecret) return "SMS_API_SECRET이 설정되어 있지 않습니다.";
-  if (!hasSenderNumber) return "SMS_SENDER_NUMBER가 설정되어 있지 않습니다.";
+  if (dryRun) return "SMS_DRY_RUN 값이 false가 아니므로 실제 발송이 차단되어 있습니다.";
+  if (provider !== "solapi") return "실제 발송 provider 값이 설정되어 있지 않습니다. 쏘다는 문자 발송 설정에서 저장하거나 SMS_PROVIDER=ssodaa로 설정하세요.";
+  if (!hasApiKey) return "SMS_API_KEY 값이 설정되어 있지 않습니다.";
+  if (!hasApiSecret) return "SMS_API_SECRET 값이 설정되어 있지 않습니다.";
+  if (!hasSenderNumber) return "SMS_SENDER_NUMBER 값이 설정되어 있지 않습니다.";
   return "실제 발송 조건을 확인해야 합니다.";
 }

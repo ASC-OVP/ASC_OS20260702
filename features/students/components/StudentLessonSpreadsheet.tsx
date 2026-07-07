@@ -1,7 +1,7 @@
 "use client";
 
 import type { ClipboardEvent, CSSProperties, KeyboardEvent, MouseEvent } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -71,6 +71,18 @@ function currentClientTime() {
   return new Date().getTime();
 }
 
+function clampContextMenuPosition(x: number, y: number, width: number, height: number) {
+  if (typeof window === "undefined") return { x, y };
+
+  const maxX = Math.max(contextMenuViewportGap, window.innerWidth - width - contextMenuViewportGap);
+  const maxY = Math.max(contextMenuViewportGap, window.innerHeight - height - contextMenuViewportGap);
+
+  return {
+    x: Math.min(Math.max(x, contextMenuViewportGap), maxX),
+    y: Math.min(Math.max(y, contextMenuViewportGap), maxY),
+  };
+}
+
 function SortIndicator({ active, direction }: { active: boolean; direction: SortDirection }) {
   if (active) {
     return (
@@ -117,6 +129,7 @@ const metaColumns: Array<Extract<GridColumn, { kind: "meta" }>> = [
 const historyLimit = 80;
 const addedLessonLabel = "추가된 차시";
 const sheetZoomStorageKey = "asc-students-sheet-zoom";
+const contextMenuViewportGap = 8;
 const sheetZoomLevels = [75, 90, 100, 110, 125, 150] as const;
 const fillPalette: ColorPaletteItem[] = [
   { label: "검정", value: "#000000" },
@@ -175,7 +188,12 @@ export default function StudentLessonSpreadsheet({
   classGroups,
   classTests = [],
   selectedTestExamId = null,
+  quickMode = null,
+  quickDate = null,
+  quickLessonId = null,
+  quickLessonPosition = null,
 }: Props) {
+  const quickEntryMode = quickMode === "attendance" || quickMode === "assignment" ? quickMode : null;
   const selectedClassGroupIdList = useMemo(() => {
     if (selectedClassGroupIds.length > 0) return selectedClassGroupIds;
     return selectedClassGroupId ? [selectedClassGroupId] : [];
@@ -262,6 +280,7 @@ export default function StudentLessonSpreadsheet({
   const [columnDrag, setColumnDrag] = useState<ColumnDragState | null>(null);
   const [columnVisibilityOpen, setColumnVisibilityOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const [replaceDialogOpen, setReplaceDialogOpen] = useState(false);
   const [replaceFindText, setReplaceFindText] = useState("");
   const [replaceWithText, setReplaceWithText] = useState("");
@@ -294,6 +313,7 @@ export default function StudentLessonSpreadsheet({
   const sheetZoomHydratedRef = useRef(false);
   const autoHiddenTestIdRef = useRef<string | null>(null);
   const autoHiddenLessonIdsRef = useRef<string[]>([]);
+  const quickSetupKeyRef = useRef<string | null>(null);
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const nameInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -331,6 +351,26 @@ export default function StudentLessonSpreadsheet({
       lessonMemoOverrides
     );
   }, [baseLessons, deletedLessonIds, insertedLessons, lessonDateOverrides, lessonMemoOverrides, lessonTimeOverrides]);
+
+  const quickInitialLessonIds = useMemo(() => {
+    if (!quickEntryMode || lessons.length === 0) return [];
+    if (quickLessonId && lessons.some((lesson) => lesson.id === quickLessonId)) return [quickLessonId];
+    if (quickLessonPosition) {
+      const positionedLesson = lessons.find((lesson) => lesson.index === quickLessonPosition);
+      if (positionedLesson) return [positionedLesson.id];
+    }
+    if (!quickDate) return [lessons[0].id];
+
+    const exactLessons = lessons.filter((lesson) => lesson.date === quickDate);
+    if (exactLessons.length > 0) return exactLessons.map((lesson) => lesson.id);
+
+    const datedLessons = lessons.filter((lesson) => lesson.date);
+    const upcomingLesson = datedLessons.find((lesson) => String(lesson.date) >= quickDate);
+    if (upcomingLesson) return [upcomingLesson.id];
+
+    const previousLesson = [...datedLessons].reverse().find((lesson) => String(lesson.date) <= quickDate);
+    return previousLesson ? [previousLesson.id] : [lessons[0].id];
+  }, [lessons, quickDate, quickEntryMode, quickLessonId, quickLessonPosition]);
 
   const activeVisibleLessonIds = useMemo(() => {
     const allowed = new Set(lessons.map((lesson) => lesson.id));
@@ -405,10 +445,14 @@ export default function StudentLessonSpreadsheet({
     [lessons, rangeEndLessonId]
   );
   const isAllLessonsVisible = activeVisibleLessonIds.length === lessons.length && lessons.every((lesson) => activeVisibleLessonIds.includes(lesson.id));
+  const showLessonPanel = lessonPanelOpen;
 
   const studentInfoColumns = useMemo<GridColumn[]>(() => {
-    const visibleMetaColumns = lessonOnlyView ? metaColumns.filter((column) => column.id === "rowNumber" || column.id === "name") : metaColumns;
-    const customGridColumns: Array<Extract<GridColumn, { kind: "custom" }>> = lessonOnlyView
+    const compactStudentColumns = lessonOnlyView;
+    const visibleMetaColumns = compactStudentColumns
+      ? metaColumns.filter((column) => column.id === "rowNumber" || column.id === "name")
+      : metaColumns;
+    const customGridColumns: Array<Extract<GridColumn, { kind: "custom" }>> = compactStudentColumns
       ? []
       : localCustomColumns
           .filter((column) => column.enabled && !customColumnTargetsLessonArea(column, localCustomColumns))
@@ -420,7 +464,7 @@ export default function StudentLessonSpreadsheet({
             customColumnId: column.id,
             afterColumnId: column.afterColumnId ?? null,
           }));
-    return lessonOnlyView ? visibleMetaColumns : insertCustomColumns(visibleMetaColumns, customGridColumns);
+    return compactStudentColumns ? visibleMetaColumns : insertCustomColumns(visibleMetaColumns, customGridColumns);
   }, [lessonOnlyView, localCustomColumns]);
 
   const hideableColumns = useMemo(() => studentInfoColumns.filter(isHideableColumn), [studentInfoColumns]);
@@ -433,7 +477,7 @@ export default function StudentLessonSpreadsheet({
   const gridColumns = useMemo<GridColumn[]>(() => {
     const visibleStudentInfoColumns = studentInfoColumns.filter((column) => !isHideableColumn(column) || !hiddenColumnSet.has(column.id));
     const orderedStudentInfoColumns = applyColumnOrder(visibleStudentInfoColumns, columnOrder);
-    const lessonColumns = visibleLessons.flatMap((lesson) => {
+    const rawLessonColumns = visibleLessons.flatMap((lesson) => {
       const groupLabel = lessonDisplayLabel(lesson, lessonLabels);
       const baseColumns = lessonFields
         .filter((field) => field.id !== "test")
@@ -471,6 +515,19 @@ export default function StudentLessonSpreadsheet({
         };
       });
       return [...baseColumns, ...testColumns];
+    });
+    const dateCounts = new Map<string, number>();
+    for (const column of rawLessonColumns) {
+      if (column.field === "test" || !column.date) continue;
+      const key = `${column.field}:${column.date}`;
+      dateCounts.set(key, (dateCounts.get(key) ?? 0) + 1);
+    }
+    const lessonColumns = rawLessonColumns.map((column) => {
+      if (column.field === "test" || !column.date) return column;
+      return {
+        ...column,
+        dateIsDuplicated: (dateCounts.get(`${column.field}:${column.date}`) ?? 0) > 1,
+      };
     });
     const lessonCustomColumns: Array<Extract<GridColumn, { kind: "custom" }>> = localCustomColumns
       .filter((column) => column.enabled && customColumnTargetsLessonArea(column, localCustomColumns))
@@ -574,14 +631,34 @@ export default function StudentLessonSpreadsheet({
   }, [scope]);
 
   useEffect(() => {
+    if (!quickEntryMode || quickInitialLessonIds.length === 0) return;
+    const setupKey = `${scope}:${quickEntryMode}:${quickDate ?? ""}:${quickLessonId ?? ""}:${quickLessonPosition ?? ""}:${quickInitialLessonIds.join(",")}`;
+    if (quickSetupKeyRef.current === setupKey) return;
+    quickSetupKeyRef.current = setupKey;
+
+    const handle = window.setTimeout(() => {
+      setVisibleLessonIds(quickInitialLessonIds);
+      setLessonPanelOpen(false);
+      setSelection(null);
+      setSelectionMode(null);
+      setSelectedRowIds([]);
+      setSelectedColumnIds([]);
+      setSelectedCellKeys([]);
+      setStatusText("");
+    }, 0);
+    return () => window.clearTimeout(handle);
+  }, [quickDate, quickEntryMode, quickInitialLessonIds, quickLessonId, quickLessonPosition, scope]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(extraLessonCountKey(scope), String(extraLessonCount));
   }, [extraLessonCount, scope]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (quickEntryMode) return;
     window.localStorage.setItem(visibleLessonsKey(scope), JSON.stringify(visibleLessonIds));
-  }, [scope, visibleLessonIds]);
+  }, [quickEntryMode, scope, visibleLessonIds]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -651,8 +728,9 @@ export default function StudentLessonSpreadsheet({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (quickEntryMode) return;
     window.localStorage.setItem(lessonPanelOpenKey(scope), lessonPanelOpen ? "1" : "0");
-  }, [lessonPanelOpen, scope]);
+  }, [lessonPanelOpen, quickEntryMode, scope]);
 
   useEffect(() => {
     if (!isFullscreen) return;
@@ -672,8 +750,9 @@ export default function StudentLessonSpreadsheet({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (quickEntryMode) return;
     window.localStorage.setItem(lessonOnlyViewKey(scope), lessonOnlyView ? "1" : "0");
-  }, [lessonOnlyView, scope]);
+  }, [lessonOnlyView, quickEntryMode, scope]);
 
   useEffect(() => {
     if (!fillPaletteOpen) return;
@@ -701,6 +780,21 @@ export default function StudentLessonSpreadsheet({
       window.removeEventListener("mousedown", closeOnPointerDown);
       window.removeEventListener("scroll", closeOnScroll, true);
     };
+  }, [contextMenu]);
+
+  useLayoutEffect(() => {
+    if (!contextMenu || typeof window === "undefined") return;
+
+    const menu = contextMenuRef.current;
+    if (!menu) return;
+
+    const rect = menu.getBoundingClientRect();
+    const nextPosition = clampContextMenuPosition(contextMenu.x, contextMenu.y, rect.width, rect.height);
+
+    setContextMenuPosition((current) => {
+      if (current && current.x === nextPosition.x && current.y === nextPosition.y) return current;
+      return nextPosition;
+    });
   }, [contextMenu]);
 
   useEffect(() => {
@@ -2349,6 +2443,7 @@ export default function StudentLessonSpreadsheet({
         setSelection({ anchor: { rowIndex, colIndex }, cursor: { rowIndex, colIndex } });
       }
     }
+    setContextMenuPosition({ x: event.clientX, y: event.clientY });
     setContextMenu({ x: event.clientX, y: event.clientY, rowIndex, colIndex, lessonId });
   }
 
@@ -2644,6 +2739,7 @@ export default function StudentLessonSpreadsheet({
         }
         if (!column.date) continue;
         recordCells.push({ studentId, date: column.date, field: column.field, value });
+        customCells.push({ studentId, columnId: column.id, value });
       } else if (columnId.startsWith(`ls_${scope}_`)) {
         continue;
       } else {
@@ -3136,7 +3232,7 @@ export default function StudentLessonSpreadsheet({
         </div>
       </div>
 
-      <div style={{ ...contentGrid, gridTemplateColumns: lessonPanelOpen ? "minmax(0, 1fr) 232px" : "minmax(0, 1fr)", height: sheetHeight }}>
+      <div style={{ ...contentGrid, gridTemplateColumns: showLessonPanel ? "minmax(0, 1fr) 232px" : "minmax(0, 1fr)", height: sheetHeight }}>
         <div style={sheetPane}>
           <div
             ref={sheetWrapRef}
@@ -3859,7 +3955,7 @@ export default function StudentLessonSpreadsheet({
             <span style={sheetBottomStatus}>{isMultiClassSelection ? `${selectedClassGroupIdList.length}개 반` : `${visibleLessons.length}차시`}</span>
           </div>
         </div>
-        {lessonPanelOpen && (
+        {showLessonPanel && (
           <aside style={{ ...lessonPanel, height: sheetHeight, maxHeight: sheetHeight }}>
             <div style={panelHead}>
                 <b>차시 선택</b>
@@ -3939,7 +4035,11 @@ export default function StudentLessonSpreadsheet({
         {contextMenu && (
           <div
             ref={contextMenuRef}
-            style={{ ...contextMenuPanel, left: contextMenu.x, top: contextMenu.y }}
+            style={{
+              ...contextMenuPanel,
+              left: contextMenuPosition?.x ?? contextMenu.x,
+              top: contextMenuPosition?.y ?? contextMenu.y,
+            }}
             onClick={(event) => event.stopPropagation()}
             onContextMenu={(event) => event.preventDefault()}
             role="menu"
@@ -4534,9 +4634,13 @@ function initialLessonCellValue(row: StudentSheetRow, column: GridColumn) {
     if (column.examId) return row.testScoreByExamId?.[column.examId] ?? "";
     return "";
   }
+  if (Object.prototype.hasOwnProperty.call(row.customValues, column.id)) {
+    return row.customValues[column.id] ?? "";
+  }
   if (column.date) {
-    if (column.field === "attendance") return row.attendanceByDate?.[column.date] ?? row.customValues[column.id] ?? legacyLessonValue(row, column) ?? "";
-    if (column.field === "assignment") return row.assignmentByDate?.[column.date] ?? row.customValues[column.id] ?? "";
+    if (column.dateIsDuplicated) return column.field === "attendance" ? legacyLessonValue(row, column) : "";
+    if (column.field === "attendance") return row.attendanceByDate?.[column.date] ?? legacyLessonValue(row, column) ?? "";
+    if (column.field === "assignment") return row.assignmentByDate?.[column.date] ?? "";
   }
   return row.customValues[column.id] ?? legacyLessonValue(row, column) ?? "";
 }
@@ -5607,6 +5711,9 @@ const contextMenuPanel: CSSProperties = {
   position: "fixed",
   zIndex: 1500,
   width: 250,
+  maxWidth: "calc(100vw - 16px)",
+  maxHeight: "calc(100vh - 16px)",
+  overflowY: "auto",
   padding: "6px 0",
   border: "1px solid #d1d5db",
   borderRadius: 8,

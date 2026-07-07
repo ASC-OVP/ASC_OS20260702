@@ -21,17 +21,6 @@ export function classGroupWhereForUser(user: ClassGroupUser) {
     return { academyId: user.academyId, teacherId: user.id };
   }
 
-  if (user.role === "ASSISTANT") {
-    return {
-      academyId: user.academyId,
-      OR: [
-        { assistantId: user.id },
-        { classAssistants: { some: { assistantId: user.id } } },
-        { studentClasses: { some: { student: { assistantId: user.id } } } },
-      ],
-    };
-  }
-
   return { academyId: user.academyId };
 }
 
@@ -56,13 +45,7 @@ export function canViewClassGroup(
 ) {
   if (user.role === "ADMIN" || user.role === "MANAGER") return true;
   if (user.role === "TEACHER") return classGroup.teacherId === user.id;
-  if (user.role === "ASSISTANT") {
-    return (
-      classGroup.assistantId === user.id ||
-      Boolean(classGroup.classAssistants?.some((link) => link.assistantId === user.id)) ||
-      Boolean(classGroup.studentClasses?.some((membership) => membership.student?.assistantId === user.id))
-    );
-  }
+  if (user.role === "ASSISTANT") return true;
   return false;
 }
 

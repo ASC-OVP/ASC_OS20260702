@@ -14,6 +14,9 @@ export function dashboardDateKey(date = new Date()) {
 
 export async function getDashboardData({ user, today }: { user: DashboardQueryUser; today: string }) {
   const academyId = user.academyId;
+  const todayStart = new Date(`${today}T00:00:00`);
+  const tomorrowStart = new Date(todayStart);
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
 
   const [
     totalStudents,
@@ -29,12 +32,14 @@ export async function getDashboardData({ user, today }: { user: DashboardQueryUs
     importantStudentMemoCount,
     openTaskCount,
     openTasks,
+    todayTasks,
     attentionStudents,
     classGroups,
     classTaskCounts,
     messageRecipients,
     omrUploads,
-    operationalQueueHiddenItems,
+    todayExams,
+    todayClassTests,
   ] = await Promise.all([
     prisma.student.count({ where: { academyId } }),
     prisma.student.count({ where: { academyId, status: "ACTIVE" } }),
@@ -132,6 +137,10 @@ export async function getDashboardData({ user, today }: { user: DashboardQueryUs
       where: { academyId, status: { not: "DONE" } },
       include: {
         assignee: { select: { id: true, name: true } },
+        assignees: {
+          orderBy: { createdAt: "asc" },
+          select: { assigneeId: true, assignee: { select: { id: true, name: true } } },
+        },
         student: {
           select: {
             id: true,
@@ -147,6 +156,34 @@ export async function getDashboardData({ user, today }: { user: DashboardQueryUs
       },
       orderBy: [{ priority: "desc" }, { dueDate: "asc" }, { createdAt: "desc" }],
       take: DASHBOARD_INBOX_LIMIT,
+    }),
+    prisma.task.findMany({
+      where: {
+        academyId,
+        OR: [
+          { scheduledDate: today },
+          { dueDate: { gte: todayStart, lt: tomorrowStart } },
+          { completedAt: { gte: todayStart, lt: tomorrowStart } },
+          {
+            status: { not: "DONE" },
+            OR: [
+              { scheduledDate: { lte: today } },
+              { dueDate: { lt: tomorrowStart } },
+            ],
+          },
+        ],
+      },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        assignee: { select: { id: true, name: true } },
+        assignees: {
+          orderBy: { createdAt: "asc" },
+          select: { assignee: { select: { id: true, name: true } } },
+        },
+      },
+      orderBy: [{ status: "asc" }, { dueDate: "asc" }, { updatedAt: "desc" }],
     }),
     prisma.student.findMany({
       where: {
@@ -197,7 +234,7 @@ export async function getDashboardData({ user, today }: { user: DashboardQueryUs
         classAssistants: { select: { assistantId: true } },
         lessons: {
           where: { lessonDate: { not: null } },
-          select: { lessonDate: true },
+          select: { id: true, position: true, lessonDate: true },
         },
         studentClasses: {
           where: {
@@ -254,11 +291,75 @@ export async function getDashboardData({ user, today }: { user: DashboardQueryUs
       orderBy: { updatedAt: "desc" },
       take: DASHBOARD_WIDGET_LIMIT,
     }),
-    prisma.$queryRaw<Array<{ signalId: string }>>`
-      SELECT "signalId"
-      FROM "OperationalQueueAcknowledgement"
-      WHERE "academyId" = ${academyId}
-    `,
+    prisma.exam.findMany({
+      where: { academyId, examDate: today },
+      select: {
+        id: true,
+        title: true,
+        examDate: true,
+        classGroup: {
+          select: {
+            id: true,
+            name: true,
+            studentClasses: {
+              where: {
+                status: "ACTIVE",
+                AND: [
+                  { OR: [{ joinedAt: null }, { joinedAt: { lte: today } }] },
+                  { OR: [{ leftAt: null }, { leftAt: { gte: today } }] },
+                ],
+                student: { status: { in: ["ACTIVE", "WATCH"] } },
+              },
+              select: { studentId: true },
+            },
+          },
+        },
+        testScores: { select: { studentId: true } },
+        results: { select: { studentId: true } },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: DASHBOARD_WIDGET_LIMIT,
+    }),
+    prisma.classTest.findMany({
+      where: { academyId, active: true },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        classLessonId: true,
+        lessonPosition: true,
+        classGroup: {
+          select: {
+            id: true,
+            name: true,
+            startDate: true,
+            endDate: true,
+            daysOfWeek: true,
+            schedule: true,
+            status: true,
+            lessons: { select: { id: true, position: true, lessonDate: true } },
+            studentClasses: {
+              where: {
+                status: "ACTIVE",
+                AND: [
+                  { OR: [{ joinedAt: null }, { joinedAt: { lte: today } }] },
+                  { OR: [{ leftAt: null }, { leftAt: { gte: today } }] },
+                ],
+                student: { status: { in: ["ACTIVE", "WATCH"] } },
+              },
+              select: { studentId: true },
+            },
+          },
+        },
+        exams: {
+          select: { id: true, examDate: true, classLessonId: true, lessonPosition: true },
+        },
+        scores: {
+          select: { studentId: true, examId: true },
+        },
+      },
+      orderBy: [{ type: "asc" }, { createdAt: "desc" }],
+    }),
   ]);
 
   return {
@@ -277,12 +378,14 @@ export async function getDashboardData({ user, today }: { user: DashboardQueryUs
     classMemos,
     taskComments,
     openTasks,
+    todayTasks,
     attentionStudents,
     classGroups,
     classTaskCounts,
     messageRecipients,
     omrUploads,
-    hiddenSignalIds: operationalQueueHiddenItems.map((item) => item.signalId),
+    todayExams,
+    todayClassTests,
   };
 }
 

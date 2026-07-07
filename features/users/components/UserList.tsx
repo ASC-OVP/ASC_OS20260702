@@ -2,7 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { canDeactivateAccount, canManageStaff, requireUser, roleText } from "@/lib/auth";
 import type { CSSProperties } from "react";
 import { Badge, Button, Input, Notice, PageHeader, Select } from "@/components/ui";
+import StaffPermissionToggles from "@/features/users/components/StaffPermissionToggles";
 import { createUserAction, deleteUserAction } from "@/features/users/actions/userActions";
+import { getStaffPermissionsForAcademy, normalizeStaffPermissionSet, staffPermissionDefinitions } from "@/lib/staffPermissions";
 import { surfaceBorder } from "@/lib/styles";
 
 type Props = {
@@ -14,16 +16,20 @@ export const dynamic = "force-dynamic";
 export default async function UsersPage({ searchParams }: Props) {
   const me = await requireUser();
   const params = await searchParams;
-  const users = await prisma.user.findMany({
-    where: { academyId: me.academyId },
-    orderBy: [{ isActive: "desc" }, { createdAt: "desc" }],
-  });
+  const [users, staffPermissions] = await Promise.all([
+    prisma.user.findMany({
+      where: { academyId: me.academyId },
+      orderBy: [{ isActive: "desc" }, { createdAt: "desc" }],
+    }),
+    getStaffPermissionsForAcademy(me.academyId),
+  ]);
   const canCreate = canManageStaff(me.role);
   const canDeactivate = canDeactivateAccount(me.role);
   const activeAdminCount = users.filter((user) => user.role === "ADMIN" && user.isActive).length;
 
   return (
     <main style={page}>
+      <style>{permissionToggleCss}</style>
       <section style={container}>
         <PageHeader
           eyebrow="계정"
@@ -64,12 +70,18 @@ export default async function UsersPage({ searchParams }: Props) {
               {users.map((user) => {
                 const isLastAdmin = user.role === "ADMIN" && activeAdminCount <= 1;
                 const showDeactivate = canDeactivate && user.id !== me.id && user.isActive && !isLastAdmin;
+                const permissions = normalizeStaffPermissionSet(staffPermissions[user.id]);
 
                 return (
                   <div key={user.id} style={{ ...row, ...(!user.isActive ? inactiveRow : {}) }}>
                     <b>{user.name}</b>
                     <span>{user.loginId}</span>
                     <span>{roleText(user.role)}</span>
+                    {canCreate && user.role === "ASSISTANT" ? (
+                      <StaffPermissionToggles userId={user.id} permissions={permissions} definitions={staffPermissionDefinitions} />
+                    ) : (
+                      <span style={permissionEmpty}>-</span>
+                    )}
                     <Badge tone={user.isActive ? "green" : "gray"}>{user.isActive ? "활성" : "비활성"}</Badge>
                     {showDeactivate ? (
                       <form action={deleteUserAction}>
@@ -108,8 +120,75 @@ const wideCard: CSSProperties = { gridColumn: "1 / -1" };
 const sectionTitle: CSSProperties = { margin: "0 0 8px", fontSize: 16, fontWeight: 950 };
 const form: CSSProperties = { display: "flex", flexDirection: "column", gap: 8 };
 const listHead: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 };
-const list: CSSProperties = { borderTop: "1px solid var(--asc-border-subtle)", marginTop: 8 };
-const row: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr 82px 72px 96px", gap: 8, alignItems: "center", minHeight: 42, padding: "8px 6px", borderBottom: "1px solid var(--asc-border-subtle)", fontSize: 13 };
+const list: CSSProperties = { borderTop: "1px solid var(--asc-border-subtle)", marginTop: 8, overflowX: "auto" };
+const row: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(110px, 1fr) minmax(120px, 1fr) 72px minmax(430px, 1.45fr) 72px 96px", gap: 8, alignItems: "center", minHeight: 42, padding: "8px 6px", borderBottom: "1px solid var(--asc-border-subtle)", fontSize: 13, minWidth: 900 };
 const inactiveRow: CSSProperties = { color: "var(--asc-text-muted)", background: "var(--asc-bg-subtle)" };
 const del: CSSProperties = { background: "var(--asc-danger-soft)", color: "var(--asc-danger)", border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", padding: "6px 9px", fontWeight: 900 };
 const muted: CSSProperties = { color: "var(--asc-text-muted)", textAlign: "center", fontWeight: 900 };
+const permissionEmpty: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 12, fontWeight: 800 };
+const permissionToggleCss = `
+.asc-permission-form {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  color: var(--asc-text-muted);
+  min-width: 0;
+  overflow: hidden;
+}
+.asc-permission-title {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--asc-text);
+  white-space: nowrap;
+}
+.asc-permission-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.asc-permission-toggle input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.asc-permission-switch {
+  position: relative;
+  inline-size: 28px;
+  block-size: 16px;
+  border-radius: 999px;
+  background: var(--asc-border-subtle);
+  flex: 0 0 auto;
+  transition: background 120ms ease;
+}
+.asc-permission-switch::after {
+  content: "";
+  position: absolute;
+  inline-size: 12px;
+  block-size: 12px;
+  inset-block-start: 2px;
+  inset-inline-start: 2px;
+  border-radius: 999px;
+  background: var(--asc-surface);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
+  transition: transform 120ms ease;
+}
+.asc-permission-toggle input:checked + .asc-permission-switch {
+  background: var(--asc-primary);
+}
+.asc-permission-toggle input:checked + .asc-permission-switch::after {
+  transform: translateX(12px);
+}
+.asc-permission-toggle input:focus-visible + .asc-permission-switch {
+  outline: 2px solid var(--asc-focus);
+  outline-offset: 2px;
+}
+`;
