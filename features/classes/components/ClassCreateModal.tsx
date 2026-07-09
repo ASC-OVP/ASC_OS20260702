@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
+import { Icon } from "@/components/ui/Icon";
 import ClassIconFields from "@/features/classes/components/ClassIconFields";
 
 type StaffOption = {
@@ -43,7 +44,7 @@ export default function ClassCreateModal({ teachers, assistants, currentUserId, 
               <div style={modalHeader}>
                 <h2 id="class-create-title" style={title}>강의 추가</h2>
                 <Link href={closeHref} style={closeButton} aria-label="닫기">
-                  x
+                  <Icon name="x" size={18} />
                 </Link>
               </div>
               {errorMessage ? <div style={errorNotice}>{errorMessage}</div> : null}
@@ -153,7 +154,7 @@ export default function ClassCreateModal({ teachers, assistants, currentUserId, 
 }
 
 const triggerButton: CSSProperties = {
-  minHeight: 32,
+  height: "var(--asc-control-height-sm)",
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
@@ -163,6 +164,7 @@ const triggerButton: CSSProperties = {
   color: "#fff",
   padding: "0 10px",
   fontSize: 13,
+  lineHeight: 1,
   fontWeight: 900,
   whiteSpace: "nowrap",
   cursor: "pointer",
@@ -183,7 +185,7 @@ const modal: CSSProperties = {
   width: "min(860px, 100%)",
   maxHeight: "calc(100vh - 24px)",
   overflow: "auto",
-  border: "1px solid transparent",
+  border: "1px solid var(--asc-surface-border)",
   borderRadius: "var(--asc-radius-lg)",
   background: "var(--asc-surface)",
   boxShadow: "var(--asc-shadow-modal)",
@@ -192,14 +194,14 @@ const modal: CSSProperties = {
 const form: CSSProperties = { display: "grid", gap: 14, padding: 22 };
 const modalHeader: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 };
 const title: CSSProperties = { margin: 0, color: "var(--asc-text)", fontSize: 20, fontWeight: 950, lineHeight: 1.1 };
-const closeButton: CSSProperties = { border: 0, background: "transparent", color: "var(--asc-text-muted)", fontSize: 20, lineHeight: 1, padding: 2, cursor: "pointer", textDecoration: "none" };
+const closeButton: CSSProperties = { width: 30, height: 30, display: "inline-grid", placeItems: "center", border: 0, background: "transparent", color: "var(--asc-text-muted)", lineHeight: 1, padding: 2, cursor: "pointer", textDecoration: "none" };
 const errorNotice: CSSProperties = { borderRadius: "var(--asc-radius-md)", background: "var(--asc-danger-soft)", color: "var(--asc-danger)", padding: "9px 11px", fontSize: 13, fontWeight: 850 };
 const identityRow: CSSProperties = { display: "grid", gridTemplateColumns: "82px minmax(0, 1fr)", gap: 18, alignItems: "end" };
 const nameField: CSSProperties = { display: "grid", gap: 5 };
 const field: CSSProperties = { display: "grid", gap: 5, minWidth: 0 };
 const label: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 13, fontWeight: 900 };
-const input: CSSProperties = { width: "100%", minHeight: 36, borderWidth: 1, borderStyle: "solid", borderColor: "transparent", borderRadius: "var(--asc-radius-lg)", background: "var(--asc-bg-subtle)", color: "var(--asc-text)", padding: "7px 10px", fontSize: 14, fontWeight: 800 };
-const softInput: CSSProperties = { ...input, width: "auto", minWidth: 140, background: "var(--asc-bg-subtle)", borderColor: "transparent" };
+const input: CSSProperties = { width: "100%", minHeight: 36, borderWidth: 1, borderStyle: "solid", borderColor: "var(--asc-border)", borderRadius: "var(--asc-radius-lg)", background: "var(--asc-surface)", color: "var(--asc-text)", padding: "7px 10px", fontSize: 14, fontWeight: 800 };
+const softInput: CSSProperties = { ...input, width: "auto", minWidth: 140 };
 const sectionRow: CSSProperties = { display: "grid", gridTemplateColumns: "96px minmax(0, 1fr)", gap: 18, alignItems: "center", borderTop: "1px solid var(--asc-border-subtle)", paddingTop: 13 };
 const rowLabel: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 13, fontWeight: 900 };
 const dateRange: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" };
@@ -209,10 +211,10 @@ const inlineField: CSSProperties = { display: "inline-flex", alignItems: "center
 const smallLabel: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 13, fontWeight: 900 };
 const staffGrid: CSSProperties = { display: "grid", gap: 8 };
 const assistantList: CSSProperties = { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" };
-const assistantChip: CSSProperties = { display: "inline-flex", alignItems: "center", gap: 6, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", padding: "5px 9px", fontSize: 12, fontWeight: 850 };
+const assistantChip: CSSProperties = { display: "inline-flex", alignItems: "center", gap: 6, border: "1px solid var(--asc-border-subtle)", borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", padding: "5px 9px", fontSize: 12, fontWeight: 850 };
 const emptyStaff: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 13, fontWeight: 850 };
 const detailGrid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10 };
 const textarea: CSSProperties = { minHeight: 62, resize: "vertical" };
 const actions: CSSProperties = { display: "flex", justifyContent: "flex-end", gap: 10, paddingTop: 0 };
-const cancelButton: CSSProperties = { minHeight: 36, display: "inline-flex", alignItems: "center", border: 0, borderRadius: "var(--asc-radius-lg)", background: "var(--asc-bg-subtle)", color: "var(--asc-text-muted)", padding: "0 16px", fontSize: 14, fontWeight: 950, cursor: "pointer", textDecoration: "none" };
-const submitButton: CSSProperties = { minHeight: 36, border: 0, borderRadius: "var(--asc-radius-lg)", background: "var(--asc-primary)", color: "#fff", padding: "0 18px", fontSize: 14, fontWeight: 950, cursor: "pointer" };
+const cancelButton: CSSProperties = { minHeight: 36, display: "inline-flex", alignItems: "center", border: "1px solid var(--asc-border)", borderRadius: "var(--asc-radius-lg)", background: "var(--asc-surface)", color: "var(--asc-text-muted)", padding: "0 16px", fontSize: 14, fontWeight: 950, cursor: "pointer", textDecoration: "none" };
+const submitButton: CSSProperties = { minHeight: 36, border: "1px solid var(--asc-primary)", borderRadius: "var(--asc-radius-lg)", background: "var(--asc-primary)", color: "#fff", padding: "0 18px", fontSize: 14, fontWeight: 950, cursor: "pointer" };

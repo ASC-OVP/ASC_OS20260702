@@ -77,7 +77,7 @@ const headerActions: CSSProperties = {
 };
 const flowSummary: CSSProperties = { display: "grid", gap: 2, color: "var(--asc-text-subtle)", fontSize: 12, fontWeight: 800, textAlign: "right" };
 const urgentAction: CSSProperties = {
-  minHeight: 32,
+  height: "var(--asc-control-height-sm)",
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
@@ -88,5 +88,6 @@ const urgentAction: CSSProperties = {
   padding: "0 12px",
   textDecoration: "none",
   fontSize: 13,
+  lineHeight: 1,
   fontWeight: 950,
 };

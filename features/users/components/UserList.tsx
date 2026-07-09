@@ -3,7 +3,7 @@ import { canDeactivateAccount, canManageStaff, requireUser, roleText } from "@/l
 import type { CSSProperties } from "react";
 import { Badge, Button, Input, Notice, PageHeader, Select } from "@/components/ui";
 import StaffPermissionToggles from "@/features/users/components/StaffPermissionToggles";
-import { createUserAction, deleteUserAction } from "@/features/users/actions/userActions";
+import { activateUserAction, createUserAction, deleteUserAction } from "@/features/users/actions/userActions";
 import { getStaffPermissionsForAcademy, normalizeStaffPermissionSet, staffPermissionDefinitions } from "@/lib/staffPermissions";
 import { surfaceBorder } from "@/lib/styles";
 
@@ -63,13 +63,14 @@ export default async function UsersPage({ searchParams }: Props) {
           <section style={{ ...card, ...(canCreate ? {} : wideCard) }}>
             <div style={listHead}>
               <h2 style={sectionTitle}>계정 목록</h2>
-              <Badge tone={canDeactivate ? "blue" : "gray"}>비활성화 권한: {canDeactivate ? "관리자/강사" : "없음"}</Badge>
+              <Badge tone={canDeactivate ? "blue" : "gray"}>상태 변경 권한: {canDeactivate ? "관리자/강사" : "없음"}</Badge>
             </div>
 
             <div style={list}>
               {users.map((user) => {
                 const isLastAdmin = user.role === "ADMIN" && activeAdminCount <= 1;
                 const showDeactivate = canDeactivate && user.id !== me.id && user.isActive && !isLastAdmin;
+                const showActivate = canDeactivate && !user.isActive;
                 const permissions = normalizeStaffPermissionSet(staffPermissions[user.id]);
 
                 return (
@@ -87,6 +88,11 @@ export default async function UsersPage({ searchParams }: Props) {
                       <form action={deleteUserAction}>
                         <input type="hidden" name="userId" value={user.id} />
                         <button style={del}>비활성화</button>
+                      </form>
+                    ) : showActivate ? (
+                      <form action={activateUserAction}>
+                        <input type="hidden" name="userId" value={user.id} />
+                        <button style={activate}>활성화</button>
                       </form>
                     ) : (
                       <span style={muted}>{user.id === me.id ? "본인" : "-"}</span>
@@ -121,9 +127,10 @@ const sectionTitle: CSSProperties = { margin: "0 0 8px", fontSize: 16, fontWeigh
 const form: CSSProperties = { display: "flex", flexDirection: "column", gap: 8 };
 const listHead: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 };
 const list: CSSProperties = { borderTop: "1px solid var(--asc-border-subtle)", marginTop: 8, overflowX: "auto" };
-const row: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(110px, 1fr) minmax(120px, 1fr) 72px minmax(430px, 1.45fr) 72px 96px", gap: 8, alignItems: "center", minHeight: 42, padding: "8px 6px", borderBottom: "1px solid var(--asc-border-subtle)", fontSize: 13, minWidth: 900 };
+const row: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(120px, 160px) minmax(130px, 180px) 72px minmax(560px, 1fr) 78px 104px", gap: 8, alignItems: "center", minHeight: 42, padding: "8px 6px", borderBottom: "1px solid var(--asc-border-subtle)", fontSize: 13, minWidth: 1120 };
 const inactiveRow: CSSProperties = { color: "var(--asc-text-muted)", background: "var(--asc-bg-subtle)" };
-const del: CSSProperties = { background: "var(--asc-danger-soft)", color: "var(--asc-danger)", border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", padding: "6px 9px", fontWeight: 900 };
+const del: CSSProperties = { background: "var(--asc-danger-soft)", color: "var(--asc-danger)", border: "1px solid rgba(222, 52, 18, 0.28)", borderRadius: "var(--asc-radius-md)", padding: "6px 9px", fontWeight: 900 };
+const activate: CSSProperties = { background: "var(--asc-success-soft)", color: "var(--asc-success)", border: "1px solid rgba(34, 135, 56, 0.24)", borderRadius: "var(--asc-radius-md)", padding: "6px 9px", fontWeight: 900 };
 const muted: CSSProperties = { color: "var(--asc-text-muted)", textAlign: "center", fontWeight: 900 };
 const permissionEmpty: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 12, fontWeight: 800 };
 const permissionToggleCss = `
@@ -131,27 +138,41 @@ const permissionToggleCss = `
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
-  gap: 8px;
+  gap: 0;
   color: var(--asc-text-muted);
   min-width: 0;
   overflow: hidden;
 }
 .asc-permission-title {
   flex: 0 0 auto;
+  margin-right: 16px;
   font-size: 12px;
   font-weight: 900;
   color: var(--asc-text);
   white-space: nowrap;
 }
+.asc-permission-toggle + .asc-permission-toggle {
+  margin-left: 24px;
+}
 .asc-permission-toggle {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 7px;
+  min-height: 28px;
+  padding: 4px 9px 4px 7px;
+  border: 1px solid var(--asc-border-subtle);
+  border-radius: var(--asc-radius-md);
+  background: var(--asc-surface);
   font-size: 12px;
   font-weight: 850;
   white-space: nowrap;
   cursor: pointer;
+}
+.asc-permission-toggle:has(input:checked) {
+  border-color: var(--asc-accent-border);
+  background: var(--asc-primary-softer);
+  color: var(--asc-primary-deep);
 }
 .asc-permission-toggle input {
   position: absolute;

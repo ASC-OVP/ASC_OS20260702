@@ -9,6 +9,9 @@ type Controls = {
   sort: "progress" | "open" | "due" | "name" | "recent";
   classGroupId: string;
   q: string;
+  period: "today" | "all";
+  dateFrom: string;
+  dateTo: string;
 };
 
 export default function TaskBoardDropdownFilters({
@@ -26,6 +29,7 @@ export default function TaskBoardDropdownFilters({
     if (next.sort !== "progress") query.set("sort", next.sort);
     if (next.classGroupId) query.set("classGroup", next.classGroupId);
     if (next.q) query.set("q", next.q);
+    if (next.period === "all") query.set("period", "all");
     const suffix = query.toString();
     window.location.href = suffix ? `/tasks?${suffix}` : "/tasks";
   }
@@ -83,8 +87,9 @@ const field: CSSProperties = {
   alignItems: "center",
   gap: 8,
   height: 38,
+  border: "1px solid var(--asc-border)",
   borderRadius: 6,
-  background: "var(--asc-bg-subtle)",
+  background: "var(--asc-surface)",
   padding: "0 9px",
   color: "var(--asc-text-muted)",
   fontSize: 12,
@@ -95,9 +100,11 @@ const select: CSSProperties = {
   width: "100%",
   height: 30,
   border: 0,
+  borderLeft: "1px solid var(--asc-border-subtle)",
   outline: 0,
   background: "transparent",
   color: "var(--asc-text)",
+  paddingLeft: 10,
   fontSize: 12,
   fontWeight: 900,
 };

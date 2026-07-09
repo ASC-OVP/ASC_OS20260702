@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { CSSProperties } from "react";
+import { Icon } from "@/components/ui/Icon";
 import { deleteSchoolScoreRecord } from "@/features/students/actions/studentActions";
 
 type Props = {
@@ -34,7 +35,7 @@ export default function SchoolScoreRecordRow({ record }: Props) {
         <input type="hidden" name="recordId" value={record.id} />
         <input type="hidden" name="studentId" value={record.studentId} />
         <button type="submit" style={deleteButton} aria-label="학교 성적 삭제" title="학교 성적 삭제">
-          ×
+          <Icon name="trash" size={14} />
         </button>
       </form>
     </div>

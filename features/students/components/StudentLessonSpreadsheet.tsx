@@ -4,6 +4,7 @@ import type { ClipboardEvent, CSSProperties, KeyboardEvent, MouseEvent } from "r
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Icon } from "@/components/ui/Icon";
 import {
   createStudentFromSheet,
   deleteStudentsFromSheet,
@@ -3959,7 +3960,9 @@ export default function StudentLessonSpreadsheet({
           <aside style={{ ...lessonPanel, height: sheetHeight, maxHeight: sheetHeight }}>
             <div style={panelHead}>
                 <b>차시 선택</b>
-                <button type="button" onClick={() => setLessonPanelOpen(false)} style={panelCloseButton} aria-label="차시 선택 닫기">×</button>
+                <button type="button" onClick={() => setLessonPanelOpen(false)} style={panelCloseButton} aria-label="차시 선택 닫기">
+                  <Icon name="x" size={18} />
+                </button>
             </div>
 
             <div style={rangeButtons}>
@@ -4231,7 +4234,7 @@ export default function StudentLessonSpreadsheet({
                   <p style={replaceModalDesc}>적용 범위: {replaceScopeLabel}</p>
                 </div>
                 <button type="button" onClick={() => setReplaceDialogOpen(false)} style={replaceCloseButton} aria-label="닫기">
-                  ×
+                  <Icon name="x" size={18} />
                 </button>
               </header>
               <div style={replaceModalBody}>
@@ -4412,7 +4415,9 @@ function TestManagementPanel({
             <b>{mode === "create" ? "\uC2DC\uD5D8 \uCD94\uAC00" : "\uC2DC\uD5D8 \uAD00\uB9AC"}</b>
             <div style={testPanelSubText}>{classGroup.name}</div>
           </div>
-          <button type="button" onClick={onClose} style={testPanelCloseButton} aria-label="\uB2EB\uAE30">{"\u00D7"}</button>
+          <button type="button" onClick={onClose} style={testPanelCloseButton} aria-label="\uB2EB\uAE30">
+            <Icon name="x" size={18} />
+          </button>
         </div>
 
         {mode === "create" ? (
@@ -5663,17 +5668,18 @@ const testPanelHeader: CSSProperties = { display: "flex", alignItems: "flex-star
 const testPanelCloseButton: CSSProperties = {
   width: 28,
   height: 28,
+  display: "inline-grid",
+  placeItems: "center",
   border: 0,
   background: "transparent",
   color: "#475569",
-  fontSize: 24,
-  lineHeight: "24px",
+  lineHeight: 1,
   cursor: "pointer",
 };
 const testPanelSection: CSSProperties = { borderTop: "1px solid #e5e7eb", paddingTop: 12, marginTop: 12 };
 const testPanelForm: CSSProperties = { display: "grid", gap: 8, marginTop: 8 };
 const testPanelLabel: CSSProperties = { display: "grid", gap: 4, fontSize: 12, color: "#475569", fontWeight: 700 };
-const testPanelInput: CSSProperties = { width: "100%", minWidth: 0, border: 0, borderRadius: 6, padding: "8px 9px", fontSize: 13, background: "var(--asc-surface)", color: "var(--asc-text)", boxShadow: "var(--asc-shadow-sm)" };
+const testPanelInput: CSSProperties = { width: "100%", minWidth: 0, border: "1px solid var(--asc-border)", borderRadius: 6, padding: "8px 9px", fontSize: 13, background: "var(--asc-surface)", color: "var(--asc-text)", boxShadow: "var(--asc-shadow-sm)" };
 const testPanelInlineFields: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, alignItems: "end" };
 const testPanelList: CSSProperties = { display: "grid", gap: 10, marginTop: 10 };
 const testPanelItem: CSSProperties = { border: "1px solid var(--asc-border-subtle)", borderRadius: 8, padding: 10, background: "var(--asc-bg-subtle)" };
@@ -5681,8 +5687,8 @@ const testPanelItemTop: CSSProperties = { display: "flex", alignItems: "center",
 const testPanelSubText: CSSProperties = { color: "#64748b", fontSize: 12, fontWeight: 600 };
 const testTypeBadge: CSSProperties = { display: "inline-flex", alignItems: "center", borderRadius: 6, background: "var(--asc-primary-soft)", color: "var(--asc-primary-hover)", padding: "2px 7px", fontSize: 11, fontWeight: 800 };
 const testPanelCheckboxLabel: CSSProperties = { display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#475569", fontWeight: 700 };
-const testPanelUpdateButton: CSSProperties = { border: 0, color: "var(--asc-primary-deep)", background: "var(--asc-primary-soft)", borderRadius: 6, padding: "7px 10px", fontSize: 12, fontWeight: 800, cursor: "pointer" };
-const dangerPanelButton: CSSProperties = { border: 0, color: "var(--asc-danger)", background: "var(--asc-danger-soft)", borderRadius: 6, padding: "7px 10px", fontWeight: 800, cursor: "pointer", marginTop: 8 };
+const testPanelUpdateButton: CSSProperties = { border: "1px solid var(--asc-accent-border)", color: "var(--asc-primary-deep)", background: "var(--asc-primary-soft)", borderRadius: 6, padding: "7px 10px", fontSize: 12, fontWeight: 800, cursor: "pointer" };
+const dangerPanelButton: CSSProperties = { border: "1px solid rgba(222, 52, 18, 0.28)", color: "var(--asc-danger)", background: "var(--asc-danger-soft)", borderRadius: 6, padding: "7px 10px", fontWeight: 800, cursor: "pointer", marginTop: 8 };
 
 const shell: CSSProperties = {
   height: "100%",
@@ -5804,11 +5810,11 @@ const replaceModalDesc: CSSProperties = {
 const replaceCloseButton: CSSProperties = {
   width: 28,
   height: 28,
-  border: "1px solid #cbd5e1",
-  borderRadius: 7,
-  background: "#ffffff",
-  color: "#111827",
-  fontSize: 19,
+  display: "inline-grid",
+  placeItems: "center",
+  border: 0,
+  background: "transparent",
+  color: "#475569",
   cursor: "pointer",
 };
 

@@ -3,6 +3,7 @@ import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
 import AutoCloseDetails from "@/features/students/components/AutoCloseDetails";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/Icon";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import PhoneInput from "@/components/PhoneInput";
@@ -187,7 +188,7 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
             actions={
               <div className="asc-action-group">
                 <Link href="/students" style={closeLink} aria-label="닫기" title="닫기">
-                  ×
+                  <Icon name="x" size={18} />
                 </Link>
               </div>
             }
@@ -404,7 +405,7 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                           <input type="hidden" name="recordId" value={record.id} />
                           <input type="hidden" name="studentId" value={student.id} />
                           <ConfirmSubmitButton message={`${record.kind} 이력을 삭제할까요?`} style={rowDeleteButton}>
-                            ×
+                            <Icon name="trash" size={14} />
                           </ConfirmSubmitButton>
                         </form>
                         <div style={recordBadges}>
@@ -460,7 +461,7 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                         <input type="hidden" name="recordId" value={record.id} />
                         <input type="hidden" name="studentId" value={student.id} />
                         <ConfirmSubmitButton message="질문 이력을 삭제할까요?" style={rowDeleteButton}>
-                          ×
+                          <Icon name="trash" size={14} />
                         </ConfirmSubmitButton>
                       </form>
                       <div style={recordBadges}>
@@ -854,7 +855,7 @@ const page: CSSProperties = { minHeight: "100vh", padding: 12, background: "var(
 const shell: CSSProperties = { width: "100%", maxWidth: "none", margin: 0, background: "transparent", border: 0, borderRadius: 0, boxShadow: "none", overflow: "visible", display: "grid", gap: 12 };
 const topBar: CSSProperties = { padding: 4, border: "1px solid transparent", borderRadius: "var(--asc-radius-lg)", background: "var(--asc-surface)", boxShadow: "var(--asc-shadow-sm)" };
 const backLink: CSSProperties = { color: "var(--asc-text-muted)", textDecoration: "none", fontSize: 12, fontWeight: 900 };
-const closeLink: CSSProperties = { width: 32, height: 32, display: "inline-grid", placeItems: "center", border: 0, borderRadius: "var(--asc-radius-md)", background: "var(--asc-bg-subtle)", color: "var(--asc-text)", textDecoration: "none", fontSize: 28, fontWeight: 500, lineHeight: 1 };
+const closeLink: CSSProperties = { width: 32, height: 32, display: "inline-grid", placeItems: "center", border: 0, background: "transparent", color: "var(--asc-text-muted)", textDecoration: "none", lineHeight: 1 };
 const detailGrid: CSSProperties = { display: "grid", gridTemplateColumns: "460px minmax(0, 1fr)", gap: 12, padding: 0, minHeight: "calc(100vh - 116px)" };
 const leftColumn: CSSProperties = { display: "grid", gridTemplateRows: "auto minmax(0, 1fr)", gap: 12, minHeight: 0 };
 const profileCard: CSSProperties = { border: "1px solid transparent", borderRadius: "var(--asc-radius-lg)", padding: 16, background: "var(--asc-surface)", boxShadow: "var(--asc-shadow-sm)" };

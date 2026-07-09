@@ -1,6 +1,7 @@
 "use client";
 
 import { createTaskBatchAction } from "@/features/tasks/actions/taskActions";
+import { Icon } from "@/components/ui/Icon";
 import type { ClassGroup, User } from "@prisma/client";
 import type { CSSProperties } from "react";
 import { useMemo, useState } from "react";
@@ -86,7 +87,9 @@ export default function TaskBatchModal({
               </div>
               <div style={modalActions}>
                 <button type="submit" form="task-batch-form" style={primaryButton} disabled={!canSubmit}>업무 배정하기</button>
-                <button type="button" aria-label="닫기" style={closeButton} onClick={() => setOpen(false)}>×</button>
+                <button type="button" aria-label="닫기" style={closeButton} onClick={() => setOpen(false)}>
+                  <Icon name="x" size={18} />
+                </button>
               </div>
             </header>
 
@@ -314,7 +317,7 @@ function roleLabel(role: string) {
 }
 
 const overlay: CSSProperties = { position: "fixed", inset: 0, zIndex: 80, display: "grid", placeItems: "center", background: "rgba(15, 23, 42, 0.54)", padding: 24 };
-const modal: CSSProperties = { width: "min(1180px, calc(100vw - 48px))", maxHeight: "calc(100vh - 48px)", overflow: "auto", borderRadius: 8, background: "var(--asc-surface)", color: "var(--asc-text)", boxShadow: "var(--asc-shadow-modal)" };
+const modal: CSSProperties = { width: "min(1180px, calc(100vw - 48px))", maxHeight: "calc(100vh - 48px)", overflow: "auto", border: "1px solid var(--asc-surface-border)", borderRadius: 8, background: "var(--asc-surface)", color: "var(--asc-text)", boxShadow: "var(--asc-shadow-modal)" };
 const modalHeader: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, padding: "22px 24px 14px", borderBottom: "1px solid var(--asc-row-divider)" };
 const modalTitle: CSSProperties = { margin: 0, fontSize: 22, fontWeight: 950 };
 const modalDesc: CSSProperties = { margin: "6px 0 0", color: "var(--asc-text-subtle)", fontSize: 13, fontWeight: 800 };
@@ -322,23 +325,23 @@ const modalActions: CSSProperties = { display: "inline-flex", alignItems: "cente
 const closeButton: CSSProperties = { width: 34, height: 34, border: 0, borderRadius: 6, background: "transparent", color: "var(--asc-text-muted)", fontSize: 28, cursor: "pointer" };
 const modalBody: CSSProperties = { display: "grid", gap: 16, padding: 24 };
 const modeGrid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 };
-const modeCard: CSSProperties = { display: "grid", gridTemplateColumns: "44px 1fr", alignItems: "center", gap: 12, minHeight: 84, textAlign: "left", border: "1px solid transparent", borderRadius: 8, background: "var(--asc-bg-subtle)", color: "var(--asc-text)", padding: 14, cursor: "pointer" };
+const modeCard: CSSProperties = { display: "grid", gridTemplateColumns: "44px 1fr", alignItems: "center", gap: 12, minHeight: 84, textAlign: "left", border: "1px solid var(--asc-border)", borderRadius: 8, background: "var(--asc-bg-subtle)", color: "var(--asc-text)", padding: 14, cursor: "pointer" };
 const modeCardActive: CSSProperties = { ...modeCard, boxShadow: "inset 0 0 0 2px var(--asc-primary)", background: "var(--asc-primary-soft)" };
 const modeIcon: CSSProperties = { display: "grid", placeItems: "center", width: 42, height: 42, borderRadius: 8, background: "var(--asc-surface)", color: "var(--asc-primary)", fontSize: 12, fontWeight: 950 };
 const optionGrid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 };
 const fieldBlock: CSSProperties = { display: "grid", gap: 7 };
 const fieldLabel: CSSProperties = { fontSize: 12, fontWeight: 950, color: "var(--asc-text-subtle)" };
-const selectInput: CSSProperties = { width: "100%", height: 38, border: "1px solid transparent", borderRadius: 6, background: "var(--asc-bg-subtle)", color: "var(--asc-text)", padding: "0 10px", fontWeight: 850 };
+const selectInput: CSSProperties = { width: "100%", height: 38, border: "1px solid var(--asc-border)", borderRadius: 6, background: "var(--asc-surface)", color: "var(--asc-text)", padding: "0 10px", fontWeight: 850 };
 const editorGrid: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(360px, 0.92fr)", gap: 12 };
 const inputPanel: CSSProperties = { borderRadius: 8, background: "var(--asc-bg-subtle)", padding: 12 };
 const panelHead: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 };
 const panelTitle: CSSProperties = { margin: 0, fontSize: 15, fontWeight: 950 };
-const largeTextarea: CSSProperties = { width: "100%", minHeight: 306, marginTop: 10, border: "1px solid transparent", borderRadius: 6, resize: "vertical", background: "var(--asc-surface)", color: "var(--asc-text)", padding: 12, lineHeight: 1.6, fontSize: 13 };
+const largeTextarea: CSSProperties = { width: "100%", minHeight: 306, marginTop: 10, border: "1px solid var(--asc-border)", borderRadius: 6, resize: "vertical", background: "var(--asc-surface)", color: "var(--asc-text)", padding: 12, lineHeight: 1.6, fontSize: 13 };
 const previewPanel: CSSProperties = { borderRadius: 8, background: "var(--asc-bg-subtle)", padding: 12, minWidth: 0 };
 const previewHead: CSSProperties = { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" };
 const countBadge: CSSProperties = { borderRadius: 6, background: "var(--asc-surface)", color: "var(--asc-text-subtle)", padding: "4px 8px", fontSize: 12, fontWeight: 950 };
 const warnBadge: CSSProperties = { ...countBadge, background: "var(--asc-warning-soft)", color: "var(--asc-warning-text)" };
-const loadButton: CSSProperties = { height: 28, border: "1px solid transparent", borderRadius: 6, background: "var(--asc-surface)", color: "var(--asc-text)", padding: "0 9px", fontSize: 12, fontWeight: 900, cursor: "pointer" };
+const loadButton: CSSProperties = { height: 28, border: "1px solid var(--asc-border)", borderRadius: 6, background: "var(--asc-surface)", color: "var(--asc-text)", padding: "0 9px", fontSize: 12, fontWeight: 900, cursor: "pointer" };
 const previewGroups: CSSProperties = { display: "grid", gap: 8, marginTop: 10 };
 const previewGroup: CSSProperties = { borderRadius: 8, background: "var(--asc-surface)", padding: 10 };
 const previewGroupTitle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 6, fontSize: 13 };
@@ -346,5 +349,5 @@ const previewItem: CSSProperties = { display: "grid", gridTemplateColumns: "18px
 const boxIcon: CSSProperties = { width: 14, height: 14, borderRadius: 3, boxShadow: "inset 0 0 0 1px var(--asc-border)" };
 const emptyText: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 13, fontWeight: 850 };
 const modalFooter: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, paddingTop: 4, color: "var(--asc-text-subtle)", fontSize: 13, fontWeight: 850 };
-const primaryButton: CSSProperties = { height: 36, border: 0, borderRadius: 6, background: "var(--asc-primary)", color: "#fff", padding: "0 14px", fontWeight: 950, cursor: "pointer" };
-const ghostButton: CSSProperties = { height: 36, border: "1px solid transparent", borderRadius: 6, background: "var(--asc-bg-subtle)", color: "var(--asc-text)", padding: "0 12px", fontWeight: 900, cursor: "pointer" };
+const primaryButton: CSSProperties = { height: 36, border: "1px solid var(--asc-primary)", borderRadius: 6, background: "var(--asc-primary)", color: "#fff", padding: "0 14px", fontWeight: 950, cursor: "pointer" };
+const ghostButton: CSSProperties = { height: 36, border: "1px solid var(--asc-border)", borderRadius: 6, background: "var(--asc-surface)", color: "var(--asc-text)", padding: "0 12px", fontWeight: 900, cursor: "pointer" };

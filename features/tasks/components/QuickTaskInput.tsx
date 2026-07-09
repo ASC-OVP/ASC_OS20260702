@@ -91,7 +91,7 @@ const hint: CSSProperties = {
 
 const button: CSSProperties = {
   height: 32,
-  border: 0,
+  border: "1px solid var(--asc-primary)",
   borderRadius: 6,
   background: "var(--asc-primary)",
   color: "#fff",

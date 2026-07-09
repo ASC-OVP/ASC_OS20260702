@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { useState } from "react";
+import { Icon } from "@/components/ui/Icon";
 
 export type AssigneeTaskModalRow = {
   assigneeId: string;
@@ -45,7 +46,9 @@ export default function AssigneeTaskModal({ row }: { row: AssigneeTaskModalRow }
                   <p style={desc}>배정 업무 {row.tasks.length}개 · 미완료 {row.openCount}개 · 진행률 {row.progress}%</p>
                 </div>
               </div>
-              <button type="button" aria-label="닫기" style={closeButton} onClick={() => setOpen(false)}>×</button>
+              <button type="button" aria-label="닫기" style={closeButton} onClick={() => setOpen(false)}>
+                <Icon name="x" size={18} />
+              </button>
             </header>
 
             <div style={summaryGrid}>
@@ -102,7 +105,7 @@ const trigger: CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   height: 30,
-  border: 0,
+  border: "1px solid var(--asc-accent-border)",
   borderRadius: 6,
   background: "var(--asc-primary-soft)",
   color: "var(--asc-primary-hover)",
@@ -162,7 +165,7 @@ const avatar: CSSProperties = {
 
 const title: CSSProperties = { margin: 0, fontSize: 18, fontWeight: 950 };
 const desc: CSSProperties = { margin: "4px 0 0", color: "var(--asc-text-muted)", fontSize: 13, fontWeight: 850 };
-const closeButton: CSSProperties = { width: 34, height: 34, border: 0, borderRadius: 6, background: "var(--asc-bg-subtle)", color: "var(--asc-text-muted)", fontSize: 24, cursor: "pointer" };
+const closeButton: CSSProperties = { width: 34, height: 34, display: "inline-grid", placeItems: "center", border: 0, background: "transparent", color: "var(--asc-text-muted)", cursor: "pointer" };
 const summaryGrid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 };
 const summaryItem: CSSProperties = { display: "grid", gap: 3, borderRadius: 8, background: "var(--asc-bg-subtle)", padding: "9px 10px", fontSize: 12, color: "var(--asc-text-muted)" };
 const taskList: CSSProperties = { display: "grid", gap: 8, overflowY: "auto", paddingRight: 4 };
