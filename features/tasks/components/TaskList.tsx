@@ -620,7 +620,6 @@ function RecurringTaskForm({
         </select>
       </label>
       <RecurringTaskFormControls
-        priority={row?.priority}
         recurrenceType={row?.recurrenceType}
         daysOfWeek={row?.daysOfWeek}
         dayOfMonth={row?.dayOfMonth}

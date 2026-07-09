@@ -3,6 +3,7 @@
 import type { CSSProperties, FormEvent } from "react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Icon } from "@/components/ui/Icon";
 import PhoneInput from "@/components/PhoneInput";
 import { createStudentFromSheet } from "@/features/students/actions/studentActions";
 import StudentClassGroupDropdownField from "@/features/students/components/StudentClassGroupDropdownField";
@@ -99,7 +100,7 @@ export default function StudentCreateModal({ classGroups, defaultClassGroupId }:
                   <p style={description}>기본 학생 정보와 배정할 반을 입력합니다.</p>
                 </div>
                 <button type="button" onClick={closeModal} style={closeButton} aria-label="닫기">
-                  ×
+                  <Icon name="x" size={18} />
                 </button>
               </div>
 
@@ -211,9 +212,9 @@ const closeButton: CSSProperties = { width: 30, height: 30, border: 0, backgroun
 const fieldGrid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 };
 const field: CSSProperties = { display: "grid", gap: 5, minWidth: 0 };
 const label: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 13, fontWeight: 900 };
-const input: CSSProperties = { width: "100%", minHeight: 36, border: "1px solid transparent", borderRadius: 8, background: "var(--asc-bg-subtle)", color: "var(--asc-text)", padding: "7px 10px", fontSize: 14, fontWeight: 800, boxSizing: "border-box" };
+const input: CSSProperties = { width: "100%", minHeight: 36, border: "1px solid var(--asc-border)", borderRadius: 8, background: "var(--asc-surface)", color: "var(--asc-text)", padding: "7px 10px", fontSize: 14, fontWeight: 800, boxSizing: "border-box" };
 const textarea: CSSProperties = { minHeight: 76, resize: "vertical" };
 const messageText: CSSProperties = { margin: 0, color: "var(--asc-text-muted)", fontSize: 13, fontWeight: 800 };
 const actions: CSSProperties = { display: "flex", justifyContent: "flex-end", gap: 8 };
-const cancelButton: CSSProperties = { minHeight: 36, border: 0, borderRadius: "var(--asc-radius-lg)", background: "var(--asc-bg-subtle)", color: "var(--asc-text-muted)", padding: "0 16px", fontSize: 14, fontWeight: 950, cursor: "pointer" };
-const submitButton: CSSProperties = { minHeight: 36, border: 0, borderRadius: "var(--asc-radius-lg)", background: "var(--asc-primary)", color: "#fff", padding: "0 18px", fontSize: 14, fontWeight: 950, cursor: "pointer" };
+const cancelButton: CSSProperties = { minHeight: 36, border: "1px solid var(--asc-border)", borderRadius: "var(--asc-radius-lg)", background: "var(--asc-surface)", color: "var(--asc-text-muted)", padding: "0 16px", fontSize: 14, fontWeight: 950, cursor: "pointer" };
+const submitButton: CSSProperties = { minHeight: 36, border: "1px solid var(--asc-primary)", borderRadius: "var(--asc-radius-lg)", background: "var(--asc-primary)", color: "#fff", padding: "0 18px", fontSize: 14, fontWeight: 950, cursor: "pointer" };

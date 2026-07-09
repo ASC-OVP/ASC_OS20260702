@@ -4,13 +4,14 @@ import type { ClassGroup, RecurringTask, Student, Task, TaskChecklistItem, TaskC
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 import { Badge, ButtonLink, PageHeader } from "@/components/ui";
-import { generateDueRecurringTasks } from "@/lib/recurringTasks";
+import { daysOfWeekText, generateDueRecurringTasks, monthlyDaysText, splitRecurringDescription } from "@/lib/recurringTasks";
 import TaskBatchModal from "./TaskBatchModal";
+import RecurringTaskCreateModal from "./RecurringTaskCreateModal";
 import TaskBoardDropdownFilters from "./TaskBoardDropdownFilters";
 import ChecklistAutoSubmit from "./ChecklistAutoSubmit";
 import AssigneeTaskModal, { type AssigneeTaskModalRow } from "./AssigneeTaskModal";
+import AssigneeAvatar from "./AssigneeAvatar";
 import QuickTaskInput from "./QuickTaskInput";
-import LegacyTaskList from "./TaskList";
 
 type TaskSearchParams = {
   status?: string;
@@ -25,6 +26,7 @@ type TaskSearchParams = {
   manage?: string;
   newRecurring?: string;
   tab?: string;
+  error?: string;
 };
 
 type Props = {
@@ -36,7 +38,7 @@ type TaskRow = Task & {
   creator: Pick<User, "id" | "name" | "role">;
   student: Pick<Student, "id" | "name"> | null;
   classGroup: Pick<ClassGroup, "id" | "name" | "teacherId"> | null;
-  recurringTask: Pick<RecurringTask, "id" | "title"> | null;
+  recurringTask: Pick<RecurringTask, "id" | "title" | "recurrenceType" | "daysOfWeek" | "dayOfMonth" | "description"> | null;
   assignees: Array<{
     assigneeId: string;
     color: string | null;
@@ -57,6 +59,7 @@ type Controls = {
   period: "today" | "all";
   dateFrom: string;
   dateTo: string;
+  hasDateFilter: boolean;
 };
 
 type TaskPreviewItem = {
@@ -64,6 +67,9 @@ type TaskPreviewItem = {
   title: string;
   done: boolean;
   taskId: string;
+  kind: "checklist" | "task";
+  itemId?: string;
+  badge?: string;
 };
 
 type AssigneeRow = {
@@ -97,10 +103,6 @@ type SummaryItem = {
 
 export default async function TaskWorkspace({ searchParams }: Props = {}) {
   const params = (await searchParams) ?? {};
-  if (params.manage === "recurring" || params.newRecurring === "1" || params.tab === "recurring") {
-    return <LegacyTaskList searchParams={Promise.resolve(params)} />;
-  }
-
   const user = await requireUser();
   const canCreate = canCreateTask(user.role);
   const isAssistant = user.role === "ASSISTANT";
@@ -109,7 +111,7 @@ export default async function TaskWorkspace({ searchParams }: Props = {}) {
 
   await generateDueRecurringTasks(user, addDays(new Date(), 45));
 
-  const [tasks, staff, classGroups] = await Promise.all([
+  const [tasks, staff, students, classGroups] = await Promise.all([
     prisma.task.findMany({
       where: taskWhereForRole(user),
       orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
@@ -118,7 +120,7 @@ export default async function TaskWorkspace({ searchParams }: Props = {}) {
         creator: { select: { id: true, name: true, role: true } },
         student: { select: { id: true, name: true } },
         classGroup: { select: { id: true, name: true, teacherId: true } },
-        recurringTask: { select: { id: true, title: true } },
+        recurringTask: { select: { id: true, title: true, recurrenceType: true, daysOfWeek: true, dayOfMonth: true, description: true } },
         assignees: {
           orderBy: { createdAt: "asc" },
           include: { assignee: { select: { id: true, name: true, role: true } } },
@@ -137,6 +139,7 @@ export default async function TaskWorkspace({ searchParams }: Props = {}) {
       },
     }),
     prisma.user.findMany({ where: { academyId: user.academyId, isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, role: true } }),
+    prisma.student.findMany({ where: { academyId: user.academyId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.classGroup.findMany({
       where: {
         academyId: user.academyId,
@@ -147,7 +150,7 @@ export default async function TaskWorkspace({ searchParams }: Props = {}) {
     }),
   ]);
 
-  const listTasks = tasks.filter((task) => shouldShowTaskInWorkList(task, controls.dateTo));
+  const listTasks = tasks.filter((task) => shouldShowTaskInWorkList(task, controls));
   const filteredTasks = filterTasks(listTasks, controls);
   const assistantStaff = staff.filter((member) => member.role === "ASSISTANT");
   const baseControls = defaultControls(todayKey);
@@ -162,6 +165,7 @@ export default async function TaskWorkspace({ searchParams }: Props = {}) {
   const todayDoneChecklist = todayRows.reduce((sum, row) => sum + row.doneCount, 0);
   const averageProgress = todayChecklist ? Math.round((todayDoneChecklist / todayChecklist) * 100) : 0;
   const actionAssignees = staff.filter((member) => ["ASSISTANT", "TEACHER", "MANAGER"].includes(member.role));
+  const showRecurringModal = canCreate && (params.manage === "recurring" || params.newRecurring === "1" || params.tab === "recurring");
   const defaultSelectedAssigneeIds = actionAssignees.slice(0, 3).map((member) => member.id);
   const topCompletedRows = [...allRows].filter((row) => row.doneCount > 0).sort((a, b) => b.doneCount - a.doneCount || b.progress - a.progress).slice(0, 3);
   const summaryItems: SummaryItem[] = [
@@ -177,8 +181,8 @@ export default async function TaskWorkspace({ searchParams }: Props = {}) {
       <section style={container}>
         <PageHeader
           eyebrow="운영 관리 / 업무"
-          title={isAssistant ? "내 업무 체크리스트" : "업무 관리"}
-          description={isAssistant ? "배정된 업무를 상세 진입 없이 체크하고 진행 상황을 남깁니다." : "관리자가 입력한 업무를 담당자별 체크리스트로 배정하고 진행률을 확인합니다."}
+          title={isAssistant ? "내 업무" : "업무 관리"}
+          description={isAssistant ? "배정된 업무를 상세 진입 없이 체크하고 진행 상황을 남깁니다." : "관리자가 입력한 업무를 담당자별로 배정하고 진행률을 확인합니다."}
           actions={
             <div className="asc-action-group">
               <Badge tone="navy">{roleLabel(user.role)}</Badge>
@@ -190,11 +194,19 @@ export default async function TaskWorkspace({ searchParams }: Props = {}) {
           }
         />
 
+        <RecurringTaskCreateModal
+          open={showRecurringModal}
+          staff={actionAssignees}
+          students={students}
+          classGroups={classGroups}
+          error={params.error}
+        />
+
         <section style={workspaceGrid}>
           <div style={boardColumn}>
             <SummaryStats items={summaryItems} />
 
-            <Panel title="담당자별 업무 보드" right={<span style={softText}>업무 상세 진입 없이 체크리스트 진행률을 바로 확인합니다.</span>}>
+            <Panel title="담당자별 업무 보드" right={<span style={softText}>업무 상세 진입 없이 진행률을 바로 확인합니다.</span>}>
               <TaskBoardControls controls={controls} classGroups={classGroups} />
               <div style={assigneeBoardList}>
                 {rows.map((row) => (
@@ -247,6 +259,10 @@ function taskWhereForRole(user: { id: string; academyId: string; role: string })
 }
 
 function controlsFromParams(params: TaskSearchParams, todayKey: string): Controls {
+  const hasDateFilter = Boolean(params.dateFrom || params.dateTo);
+  const dateFrom = dateParam(params.dateFrom) ?? todayKey;
+  const dateTo = dateParam(params.dateTo) ?? dateParam(params.dateFrom) ?? todayKey;
+
   return {
     status: params.status === "open" || params.status === "done" ? params.status : "all",
     scope: params.scope === "recurring" || params.scope === "general" ? params.scope : "all",
@@ -254,15 +270,21 @@ function controlsFromParams(params: TaskSearchParams, todayKey: string): Control
     assigneeIds: [],
     classGroupId: params.classGroup ?? "",
     q: params.q?.trim() ?? "",
-    period: params.period === "all" ? "all" : "today",
-    dateFrom: todayKey,
-    dateTo: todayKey,
+    period: params.period === "all" && !hasDateFilter ? "all" : "today",
+    dateFrom,
+    dateTo,
+    hasDateFilter,
   };
 }
 
-function shouldShowTaskInWorkList(task: TaskRow, cutoffKey: string) {
+function dateParam(value: string | undefined) {
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+}
+
+function shouldShowTaskInWorkList(task: TaskRow, controls: Controls) {
   if (!task.recurringTaskId || !task.scheduledDate) return true;
-  return task.scheduledDate <= cutoffKey;
+  if (controls.hasDateFilter) return task.scheduledDate >= controls.dateFrom && task.scheduledDate <= controls.dateTo;
+  return task.scheduledDate === controls.dateTo;
 }
 
 function defaultControls(todayKey = toYmd(new Date())): Controls {
@@ -276,12 +298,14 @@ function defaultControls(todayKey = toYmd(new Date())): Controls {
     period: "today",
     dateFrom: todayKey,
     dateTo: todayKey,
+    hasDateFilter: false,
   };
 }
 
 function taskInPeriod(task: TaskRow, controls: Controls) {
-  if (controls.period === "all") return true;
   const key = task.scheduledDate ?? (task.dueDate ? toYmd(task.dueDate) : toYmd(task.createdAt));
+  if (controls.hasDateFilter) return key >= controls.dateFrom && key <= controls.dateTo;
+  if (controls.period === "all") return true;
   return key >= controls.dateFrom && key <= controls.dateTo;
 }
 
@@ -345,7 +369,7 @@ function buildAssigneeRows(tasks: TaskRow[], currentUserId: string, isAssistant:
     for (const assignee of assignees) {
       if (isAssistant && assignee.id !== currentUserId) continue;
 
-      const previewItems = visibleChecklistItemsForTask(task, assignee.name, controls);
+      const previewItems = visibleWorkItemsForTask(task, assignee.name, controls);
       const includeTaskWithoutChecklist = task.checklistItems.length === 0 && taskPassesTaskStatus(task, controls);
       if (previewItems.length === 0 && !includeTaskWithoutChecklist) continue;
 
@@ -400,19 +424,38 @@ function buildAssigneeRows(tasks: TaskRow[], currentUserId: string, isAssistant:
   }));
 }
 
-function visibleChecklistItemsForTask(task: TaskRow, assigneeName: string, controls: Controls): TaskPreviewItem[] {
+function visibleWorkItemsForTask(task: TaskRow, assigneeName: string, controls: Controls): TaskPreviewItem[] {
   const query = normalizedQuery(controls.q);
   const taskContextMatches = Boolean(query) && taskContextSearchText(task, assigneeName).includes(query);
+  const badge = task.recurringTaskId ? "정기 업무" : undefined;
 
-  return task.checklistItems
-    .filter((item) => itemPassesStatus(item, controls))
-    .filter((item) => !query || taskContextMatches || item.title.toLocaleLowerCase("ko-KR").includes(query))
-    .map((item) => ({
-      id: item.id,
-      title: item.title,
-      done: item.isDone,
-      taskId: task.id,
-    }));
+  if (task.checklistItems.length > 0) {
+    return task.checklistItems
+      .filter((item) => itemPassesStatus(item, controls))
+      .filter((item) => !query || taskContextMatches || item.title.toLocaleLowerCase("ko-KR").includes(query))
+      .map((item) => ({
+        id: item.id,
+        itemId: item.id,
+        kind: "checklist" as const,
+        title: item.title,
+        done: item.isDone,
+        taskId: task.id,
+        badge,
+      }));
+  }
+
+  const title = displayTaskTitle(task);
+  if (!taskPassesTaskStatus(task, controls)) return [];
+  if (query && !taskContextMatches && !title.toLocaleLowerCase("ko-KR").includes(query)) return [];
+
+  return [{
+    id: `task:${task.id}`,
+    kind: "task",
+    title,
+    done: task.status === "DONE",
+    taskId: task.id,
+    badge,
+  }];
 }
 
 function itemPassesStatus(item: Pick<TaskChecklistItem, "isDone">, controls: Controls) {
@@ -506,19 +549,38 @@ function ensureAssistantRows(rows: AssigneeRow[], assistants: Array<Pick<User, "
 }
 
 function taskSummary(task: TaskRow, controls: Controls = defaultControls(), assigneeName = task.assignee.name): AssigneeTaskModalRow["tasks"][number] {
+  const description = splitRecurringDescription(task.description).description;
+
   return {
     id: task.id,
-    title: task.title,
+    title: displayTaskTitle(task),
     status: statusLabel(task.status),
     type: taskTypeLabel(task.type),
     dueLabel: task.dueDate ? `마감 ${formatShortDate(task.dueDate)}` : "마감 없음",
     contextLabel: task.classGroup?.name ?? task.student?.name ?? "",
-    checklistItems: visibleChecklistItemsForTask(task, assigneeName, controls).map((item) => ({
+    isRecurring: Boolean(task.recurringTaskId),
+    recurrenceLabel: task.recurringTask ? recurringScheduleText(task.recurringTask) : "",
+    description,
+    checklistItems: visibleWorkItemsForTask(task, assigneeName, controls).map((item) => ({
       id: item.id,
       title: item.title,
       done: item.done,
+      badge: item.badge,
     })),
   };
+}
+
+function displayTaskTitle(task: Pick<TaskRow, "title" | "recurringTaskId" | "scheduledDate">) {
+  if (task.recurringTaskId && task.scheduledDate && task.title.startsWith(`${task.scheduledDate} `)) {
+    return task.title.slice(task.scheduledDate.length + 1);
+  }
+  return task.title;
+}
+
+function recurringScheduleText(row: Pick<RecurringTask, "recurrenceType" | "daysOfWeek" | "dayOfMonth">) {
+  if (row.recurrenceType === "DAILY") return "반복 조건: 매일";
+  if (row.recurrenceType === "MONTHLY") return `반복 조건: 매월 ${monthlyDaysText(row.daysOfWeek, row.dayOfMonth)}`;
+  return `반복 조건: ${daysOfWeekText(row.daysOfWeek)}`;
 }
 
 function statusLabel(status: string) {
@@ -607,7 +669,7 @@ function AssigneeBoardRow({ row, isAssistant, currentUserId }: { row: AssigneeRo
   return (
     <article style={assigneeRow}>
       <div style={assigneePerson}>
-        <span style={avatar}>{row.name.slice(0, 1)}</span>
+        <AssigneeAvatar seed={row.assigneeId} />
         <div>
           <b style={assigneeName}>{row.name} {row.roleLabel}</b>
           <div style={muted}>{row.roleLabel}</div>
@@ -618,14 +680,16 @@ function AssigneeBoardRow({ row, isAssistant, currentUserId }: { row: AssigneeRo
           ? row.previewItems.map((item) => (
               <ChecklistAutoSubmit
                 key={item.id}
-                itemId={item.id}
+                itemId={item.itemId}
                 taskId={item.taskId}
                 title={item.title}
                 done={item.done}
+                mode={item.kind}
+                badge={item.badge}
                 disabled={isAssistant && row.assigneeId !== currentUserId}
               />
             ))
-          : <span style={emptyInline}>배정된 체크리스트가 없습니다.</span>}
+          : <span style={emptyInline}>배정된 업무가 없습니다.</span>}
       </div>
       <div style={progressCell}>
         <span style={status === "완료" ? successBadge : row.overdueCount ? dangerBadge : row.todayDueCount ? warnBadge : infoBadge}>{status}</span>
@@ -807,12 +871,11 @@ const periodControls: CSSProperties = { display: "inline-grid", gridTemplateColu
 const boardSearchRow: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(240px, 1fr) auto", gap: 8 };
 const boardSearchInput: CSSProperties = { height: 38, border: "1px solid transparent", borderRadius: 6, background: "var(--asc-bg-subtle)", color: "var(--asc-text)", padding: "0 12px", fontWeight: 850 };
 const assigneeBoardList: CSSProperties = { display: "grid", gap: 8 };
-const assigneeRow: CSSProperties = { display: "grid", gridTemplateColumns: "220px minmax(320px, 1fr) 180px 110px", gap: 12, alignItems: "center", minHeight: 88, borderRadius: 8, background: "var(--asc-bg-subtle)", padding: "12px 12px" };
+const assigneeRow: CSSProperties = { display: "grid", gridTemplateColumns: "220px minmax(320px, 1fr) 180px 110px", gap: 12, alignItems: "center", minHeight: 64, borderRadius: 8, background: "var(--asc-bg-subtle)", padding: "6px 8px" };
 const assigneePerson: CSSProperties = { display: "grid", gridTemplateColumns: "40px 1fr", gap: 10, alignItems: "center", minWidth: 0 };
-const avatar: CSSProperties = { display: "grid", placeItems: "center", width: 40, height: 40, borderRadius: "50%", background: "var(--asc-primary-soft)", color: "var(--asc-primary)", fontWeight: 950 };
 const assigneeName: CSSProperties = { display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 14 };
 const muted: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 12, fontWeight: 850 };
-const checklistPreview: CSSProperties = { display: "grid", gap: 7, minWidth: 0, minHeight: 80, maxHeight: 140, overflowY: "auto", alignContent: "start", borderRadius: 8, background: "var(--asc-surface)", padding: 9, boxShadow: "inset 0 0 0 1px var(--asc-border-subtle)" };
+const checklistPreview: CSSProperties = { display: "grid", gap: 2, minWidth: 0, height: 72, maxHeight: 72, overflowY: "auto", alignContent: "start", borderRadius: 8, background: "var(--asc-surface)", padding: 4, boxShadow: "inset 0 0 0 1px var(--asc-border-subtle)" };
 const emptyInline: CSSProperties = { color: "var(--asc-text-muted)", fontSize: 12, fontWeight: 850 };
 const progressCell: CSSProperties = { display: "grid", gap: 5, fontSize: 12 };
 const rowActions: CSSProperties = { display: "inline-flex", justifyContent: "flex-end", alignItems: "center", gap: 6 };

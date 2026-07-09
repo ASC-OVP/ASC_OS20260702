@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
+import { Icon } from "@/components/ui/Icon";
 import {
   createAnnouncementAction,
   deleteAnnouncementAction,
@@ -180,7 +181,7 @@ function AnnouncementManageModal({ memo, onClose }: { memo: AnnouncementMemoView
             <p style={modalDesc}>{formatDateTime(memo.createdAt)} 작성 · {memo.authorName}</p>
           </div>
           <button type="button" onClick={onClose} style={closeButton} aria-label="닫기">
-            ×
+            <Icon name="x" size={18} />
           </button>
         </div>
 
@@ -274,13 +275,13 @@ const summary: CSSProperties = { display: "flex", gap: 6, flexWrap: "wrap", colo
 const errorBox: CSSProperties = { margin: 0, padding: 10, borderRadius: "var(--asc-radius-md)", background: "var(--asc-danger-soft)", color: "var(--asc-danger)", fontWeight: 900 };
 const composeDetails: CSSProperties = { position: "relative" };
 const writeButton: CSSProperties = { height: 30, display: "inline-flex", alignItems: "center", borderRadius: "var(--asc-radius-md)", background: "var(--asc-text)", color: "var(--asc-bg)", padding: "0 10px", fontSize: 12, fontWeight: 950, cursor: "pointer", listStyle: "none", whiteSpace: "nowrap" };
-const composeBox: CSSProperties = { position: "absolute", top: 36, right: 0, zIndex: 5, width: "min(460px, calc(100vw - 96px))", display: "grid", gap: 8, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", padding: 10, background: "var(--asc-surface)", boxShadow: "var(--asc-shadow-modal)" };
-const input: CSSProperties = { width: "100%", minWidth: 0, height: 34, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", padding: "0 10px", background: "var(--asc-bg-subtle)", color: "var(--asc-text)" };
-const textarea: CSSProperties = { width: "100%", minWidth: 0, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", padding: 10, background: "var(--asc-bg-subtle)", color: "var(--asc-text)", resize: "vertical", lineHeight: 1.45 };
+const composeBox: CSSProperties = { position: "absolute", top: 36, right: 0, zIndex: 5, width: "min(460px, calc(100vw - 96px))", display: "grid", gap: 8, border: "1px solid var(--asc-surface-border)", borderRadius: "var(--asc-radius-md)", padding: 10, background: "var(--asc-surface)", boxShadow: "var(--asc-shadow-modal)" };
+const input: CSSProperties = { width: "100%", minWidth: 0, height: 34, border: "1px solid var(--asc-border)", borderRadius: "var(--asc-radius-md)", padding: "0 10px", background: "var(--asc-surface)", color: "var(--asc-text)" };
+const textarea: CSSProperties = { width: "100%", minWidth: 0, border: "1px solid var(--asc-border)", borderRadius: "var(--asc-radius-md)", padding: 10, background: "var(--asc-surface)", color: "var(--asc-text)", resize: "vertical", lineHeight: 1.45 };
 const composeBottom: CSSProperties = { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" };
-const select: CSSProperties = { height: 34, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", padding: "0 9px", background: "var(--asc-bg-subtle)", color: "var(--asc-text)", fontWeight: 850 };
+const select: CSSProperties = { height: 34, border: "1px solid var(--asc-border)", borderRadius: "var(--asc-radius-md)", padding: "0 9px", background: "var(--asc-surface)", color: "var(--asc-text)", fontWeight: 850 };
 const checkLabel: CSSProperties = { display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 900, color: "var(--asc-text-subtle)" };
-const primaryButton: CSSProperties = { marginLeft: "auto", height: 34, border: 0, borderRadius: "var(--asc-radius-md)", background: "var(--asc-text)", color: "var(--asc-bg)", padding: "0 12px", fontWeight: 950 };
+const primaryButton: CSSProperties = { marginLeft: "auto", height: 34, border: "1px solid var(--asc-text)", borderRadius: "var(--asc-radius-md)", background: "var(--asc-text)", color: "var(--asc-bg)", padding: "0 12px", fontWeight: 950 };
 const list: CSSProperties = { display: "grid", gap: 7 };
 const pinnedGroup: CSSProperties = { display: "grid", gap: 7, border: "1px solid transparent", borderRadius: "var(--asc-radius-md)", padding: 8, background: "var(--asc-warning-soft)" };
 const normalGroup: CSSProperties = { display: "grid", gap: 7 };

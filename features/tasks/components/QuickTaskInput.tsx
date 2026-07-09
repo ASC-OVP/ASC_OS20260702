@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { createTaskAction } from "@/features/tasks/actions/taskActions";
 import type { User } from "@prisma/client";
@@ -20,7 +20,7 @@ export default function QuickTaskInput({
         style={quickTextarea}
         value={text}
         onChange={(event) => setText(event.target.value)}
-        placeholder="예: 신동훈 - 테스트 채점 확인"
+        placeholder="예: 신동윤 - 테스트 채점 확인"
       />
       <input type="hidden" name="title" value={parsed.content || "빠른 업무"} />
       <input type="hidden" name="description" value={text} />
@@ -91,7 +91,7 @@ const hint: CSSProperties = {
 
 const button: CSSProperties = {
   height: 32,
-  border: 0,
+  border: "1px solid var(--asc-primary)",
   borderRadius: 6,
   background: "var(--asc-primary)",
   color: "#fff",
@@ -100,3 +100,4 @@ const button: CSSProperties = {
   fontWeight: 950,
   cursor: "pointer",
 };
+

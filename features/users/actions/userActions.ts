@@ -127,6 +127,44 @@ export async function deleteUserAction(formData: FormData) {
   redirect("/users");
 }
 
+export async function activateUserAction(formData: FormData) {
+  const user = await requireUser();
+
+  if (!canDeactivateAccount(user.role)) {
+    redirect("/users?error=permission");
+  }
+
+  const id = text(formData, "userId");
+
+  if (!id) {
+    redirect("/users?error=missing");
+  }
+
+  const target = await prisma.user.findFirst({
+    where: {
+      id,
+      academyId: user.academyId,
+    },
+    select: {
+      id: true,
+      isActive: true,
+    },
+  });
+
+  if (!target || target.isActive) {
+    redirect("/users?error=missing");
+  }
+
+  await prisma.user.update({
+    where: { id: target.id },
+    data: { isActive: true },
+  });
+
+  revalidatePath("/users");
+  revalidatePath("/staff");
+  redirect("/users");
+}
+
 export async function updateUserPermissionsAction(formData: FormData) {
   const user = await requireUser();
 

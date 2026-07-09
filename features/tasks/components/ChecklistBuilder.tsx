@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
+import { Icon } from "@/components/ui/Icon";
 
 type Props = {
   name?: string;
@@ -44,7 +45,7 @@ export default function ChecklistBuilder({ name = "checklist", defaultValue }: P
               <span style={emptyCheck} />
               <span style={itemText}>{item}</span>
               <button type="button" style={removeButton} aria-label={`${item} 삭제`} onClick={() => removeItem(index)}>
-                ×
+                <Icon name="trash" size={13} />
               </button>
             </span>
           ))}

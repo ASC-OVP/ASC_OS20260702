@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect } from "react";
 import type { CSSProperties } from "react";
+import { Icon } from "@/components/ui/Icon";
 
 type Props = {
   href: string;
@@ -31,7 +32,7 @@ export default function OmrCloseButton({ href, confirmOnClose = false }: Props) 
 
   return (
     <button type="button" onClick={close} style={closeButton} aria-label="OMR 화면 닫기">
-      ×
+      <Icon name="x" size={18} />
     </button>
   );
 }
@@ -39,14 +40,12 @@ export default function OmrCloseButton({ href, confirmOnClose = false }: Props) 
 const closeButton: CSSProperties = {
   width: 32,
   height: 32,
-  border: "1px solid transparent",
-  borderRadius: "var(--asc-radius-md)",
-  background: "var(--asc-bg-subtle)",
-  color: "var(--asc-text)",
-  fontSize: 20,
-  lineHeight: "28px",
-  fontWeight: 900,
+  display: "inline-grid",
+  placeItems: "center",
+  border: 0,
+  background: "transparent",
+  color: "var(--asc-text-muted)",
+  lineHeight: 1,
   cursor: "pointer",
-  boxShadow: "var(--asc-shadow-sm)",
   flex: "0 0 auto",
 };

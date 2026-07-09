@@ -3,6 +3,7 @@
 import type { CSSProperties, ChangeEvent, ClipboardEvent } from "react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Icon } from "@/components/ui/Icon";
 import { createStudentsFromExcelUpload } from "@/features/students/actions/studentActions";
 import StudentClassGroupDropdownField from "@/features/students/components/StudentClassGroupDropdownField";
 import { withJosa } from "@/lib/koreanParticles";
@@ -358,7 +359,9 @@ export default function StudentExcelUploadModal({ classGroups, existingStudents,
                 <h2 id="student-excel-upload-title" style={modalTitle}>학생 엑셀 업로드</h2>
                 <p style={modalDesc}>기존 엑셀 명단을 붙여넣거나 엑셀/CSV 파일로 불러온 뒤, 열 매핑과 대상 반을 확인하고 등록합니다.</p>
               </div>
-              <button type="button" onClick={closeModal} style={iconButton} aria-label="닫기" disabled={isPending}>×</button>
+              <button type="button" onClick={closeModal} style={iconButton} aria-label="닫기" disabled={isPending}>
+                <Icon name="x" size={18} />
+              </button>
             </header>
 
             <div style={toolbar}>
@@ -433,7 +436,7 @@ export default function StudentExcelUploadModal({ classGroups, existingStudents,
                             <input value={getCell(row, colIndex)} onChange={(event) => updateCell(rowIndex, colIndex, event.target.value)} onPaste={(event) => handlePaste(event, rowIndex, colIndex)} placeholder={rowIndex === 0 ? fieldLabel(column.field) : ""} style={cellInput} aria-label={`${rowIndex + 1}행 ${colIndex + 1}열`} />
                           </td>
                         ))}
-                        <td style={actionTd}><button type="button" onClick={() => deleteRow(rowIndex)} style={dangerIconButton} aria-label={`${rowIndex + 1}행 삭제`}>×</button></td>
+                        <td style={actionTd}><button type="button" onClick={() => deleteRow(rowIndex)} style={dangerIconButton} aria-label={`${rowIndex + 1}행 삭제`}><Icon name="trash" size={14} /></button></td>
                       </tr>
                     );
                   })}

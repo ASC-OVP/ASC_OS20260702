@@ -2,7 +2,6 @@
 
 import { useState, type CSSProperties } from "react";
 import { weekdayOptions } from "@/lib/recurringTasks";
-import TaskPrioritySelector from "./TaskPrioritySelector";
 
 type RecurrenceType = "DAILY" | "WEEKLY" | "MONTHLY";
 
@@ -10,7 +9,6 @@ type Props = {
   recurrenceType?: string;
   daysOfWeek?: string | null;
   dayOfMonth?: number | null;
-  priority?: string;
 };
 
 const recurrenceOptions: Array<{ value: RecurrenceType; label: string }> = [
@@ -27,7 +25,6 @@ export default function RecurringTaskFormControls({
   recurrenceType,
   daysOfWeek,
   dayOfMonth,
-  priority,
 }: Props) {
   const [selectedRecurrence, setSelectedRecurrence] = useState<RecurrenceType>(normalizedRecurrence(recurrenceType));
   const [selectedDays, setSelectedDays] = useState(() => String(daysOfWeek ?? "").split(",").filter(Boolean));
@@ -40,8 +37,6 @@ export default function RecurringTaskFormControls({
 
   return (
     <>
-      <TaskPrioritySelector defaultValue={priority} />
-
       <section style={{ ...controlGroup, gridColumn: "1 / -1" }}>
         <span style={controlTitle}>반복 방식</span>
         <input type="hidden" name="recurrenceType" value={selectedRecurrence} />

@@ -9,6 +9,8 @@ export type { DataTableProps } from "@/components/ui/DataTable";
 export { Drawer } from "@/components/ui/Drawer";
 export { EmptyState } from "@/components/ui/EmptyState";
 export { FilterBar } from "@/components/ui/FilterBar";
+export { Icon } from "@/components/ui/Icon";
+export type { IconName } from "@/components/ui/Icon";
 export type { FilterBarProps } from "@/components/ui/FilterBar";
 export { Input } from "@/components/ui/Input";
 export type { InputProps } from "@/components/ui/Input";

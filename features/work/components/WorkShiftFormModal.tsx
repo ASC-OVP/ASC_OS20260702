@@ -2,6 +2,7 @@
 
 import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { Icon } from "@/components/ui/Icon";
 
 type Props = {
   title: string;
@@ -53,7 +54,7 @@ export default function WorkShiftFormModal({ title, triggerLabel, defaultOpen = 
             <header style={modalHeader}>
               <h2 id="work-shift-modal-title" style={modalTitle}>{title}</h2>
               <button type="button" onClick={closeModal} style={closeButton} aria-label="닫기">
-                x
+                <Icon name="x" size={18} />
               </button>
             </header>
             <div style={modalBody}>{children}</div>
@@ -114,12 +115,11 @@ const modalTitle: CSSProperties = {
 const closeButton: CSSProperties = {
   width: 32,
   height: 32,
-  border: "1px solid transparent",
-  borderRadius: "var(--asc-radius-md)",
-  background: "var(--asc-bg-subtle)",
+  display: "inline-grid",
+  placeItems: "center",
+  border: 0,
+  background: "transparent",
   color: "var(--asc-text-muted)",
-  fontSize: 16,
-  fontWeight: 950,
 };
 
 const modalBody: CSSProperties = {

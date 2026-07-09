@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Icon } from "@/components/ui/Icon";
 import { deleteStickyMemoAction, updateStickyMemoAction } from "@/features/memos/actions/memoActions";
 import { primaryStickyMemoChangedEvent, readPrimaryStickyMemoId, writePrimaryStickyMemoId } from "@/features/memos/components/stickyMemoPrimary";
 import { getStickyMemoColorTheme, normalizeStickyMemoColor, stickyMemoColors } from "@/features/memos/components/stickyMemoColors";
@@ -136,7 +137,7 @@ export default function StickyMemoCard({ memo, compact = false, showDelete = tru
         <form action={deleteStickyMemoAction} style={deleteForm}>
           <input type="hidden" name="stickyMemoId" value={memo.id} />
           <button type="submit" style={deleteButton} aria-label="포스트잇 삭제">
-            ×
+            <Icon name="trash" size={14} />
           </button>
         </form>
       )}
