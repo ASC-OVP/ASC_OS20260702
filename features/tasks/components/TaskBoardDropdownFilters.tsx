@@ -9,6 +9,9 @@ type Controls = {
   sort: "progress" | "open" | "due" | "name" | "recent";
   classGroupId: string;
   q: string;
+  period: "today" | "all";
+  dateFrom: string;
+  dateTo: string;
 };
 
 export default function TaskBoardDropdownFilters({
@@ -26,6 +29,7 @@ export default function TaskBoardDropdownFilters({
     if (next.sort !== "progress") query.set("sort", next.sort);
     if (next.classGroupId) query.set("classGroup", next.classGroupId);
     if (next.q) query.set("q", next.q);
+    if (next.period === "all") query.set("period", "all");
     const suffix = query.toString();
     window.location.href = suffix ? `/tasks?${suffix}` : "/tasks";
   }
